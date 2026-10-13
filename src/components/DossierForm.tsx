@@ -279,8 +279,8 @@ export const DossierForm: React.FC<DossierFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!candidate.fullNameAr.trim() || !candidate.cin.trim() || !candidate.ppr.trim()) {
-      alert('يرجى ملء الحقول الإلزامية: الاسم الكامل، رقم البطاقة الوطنية (CIN)، ورقم التأجير (PPR)');
+    if (!candidate.fullNameAr.trim() || !candidate.ppr.trim()) {
+      alert('يرجى ملء الحقول الإلزامية: الاسم الكامل ورقم التأجير (PPR)');
       setActiveStep(1);
       return;
     }
@@ -469,18 +469,6 @@ export const DossierForm: React.FC<DossierFormProps> = ({
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Nom et Prénom (بالفرنسية)</label>
-                <input
-                  type="text"
-                  dir="ltr"
-                  placeholder="Ex: Abdessalam BENJELLOUN"
-                  value={candidate.fullNameFr}
-                  onChange={(e) => setCandidate({ ...candidate, fullNameFr: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 focus:bg-white text-left"
-                />
-              </div>
-
-              <div>
                 <label className="block font-semibold text-slate-700 mb-1">الجنس *</label>
                 <select
                   value={candidate.gender || 'male'}
@@ -490,18 +478,6 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                   <option value="male">ذكر</option>
                   <option value="female">أنثى</option>
                 </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">رقم بطاقة التعريف الوطنية (CIN) *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="مثال: AA12345"
-                  value={candidate.cin}
-                  onChange={(e) => setCandidate({ ...candidate, cin: e.target.value.toUpperCase() })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-mono focus:outline-none focus:border-emerald-500 focus:bg-white"
-                />
               </div>
 
               <div>
