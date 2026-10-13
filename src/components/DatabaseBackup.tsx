@@ -9,15 +9,10 @@ import {
   ShieldCheck,
   HardDrive,
   Copy,
-  Printer,
-  Server,
-  Table,
-  ExternalLink
+  Printer
 } from 'lucide-react';
 import { HousingDossier } from '../types/housing';
 import { INITIAL_DOSSIERS } from '../data/mockDossiers';
-import { generateArefOrientalSql } from '../utils/generateSqlDump';
-import { PhpMyAdminModal } from './PhpMyAdminModal';
 
 interface DatabaseBackupProps {
   dossiers: HousingDossier[];
@@ -31,7 +26,6 @@ export const DatabaseBackup: React.FC<DatabaseBackupProps> = ({
   onResetDossiers
 }) => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [showPhpMyAdmin, setShowPhpMyAdmin] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExportJSON = () => {
@@ -47,22 +41,6 @@ export const DatabaseBackup: React.FC<DatabaseBackupProps> = ({
     URL.revokeObjectURL(url);
 
     setSuccessMsg('تم تصدير قاعدة البيانات بنجاح إلى ملف JSON.');
-    setTimeout(() => setSuccessMsg(null), 3500);
-  };
-
-  const handleExportSQL = () => {
-    const sql = generateArefOrientalSql(dossiers);
-    const blob = new Blob([sql], { type: 'application/sql;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `aref_oriental_${new Date().toISOString().split('T')[0]}.sql`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    setSuccessMsg('تم تحميل ملف aref_oriental.sql الجاهز للاستيراد في phpMyAdmin.');
     setTimeout(() => setSuccessMsg(null), 3500);
   };
 
@@ -126,46 +104,6 @@ export const DatabaseBackup: React.FC<DatabaseBackupProps> = ({
           <span>{successMsg}</span>
         </div>
       )}
-
-      {/* phpMyAdmin Direct Integration Banner */}
-      <div className="bg-[#2c3e50] text-white p-5 rounded-xl border border-slate-700 shadow-sm space-y-3">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="bg-[#e67e22] text-white font-mono text-[10px] font-bold px-2 py-0.5 rounded">
-                MySQL / phpMyAdmin
-              </span>
-              <span className="font-mono text-xs text-amber-300">
-                http://localhost/phpmyadmin/index.php?route=/database/structure&db=aref_oriental
-              </span>
-            </div>
-            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-              <Server className="w-4 h-4 text-[#e67e22]" />
-              <span>ربط وتصدير قاعدة البيانات `aref_oriental`</span>
-            </h3>
-            <p className="text-xs text-slate-300">
-              يمكنك تصدير كود SQL المباشر لإنشاء الجداول الستة وتغذيتها ببيانات ملفات الترشيح والمديريات الإقليمية الثماني بالشرق.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setShowPhpMyAdmin(true)}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-600 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer"
-            >
-              <Table className="w-4 h-4 text-amber-400" />
-              <span>معاينة بنية الجداول و SQL</span>
-            </button>
-            <button
-              onClick={handleExportSQL}
-              className="px-4 py-2 bg-[#e67e22] hover:bg-[#d35400] text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
-            >
-              <Download className="w-4 h-4" />
-              <span>تحميل aref_oriental.sql</span>
-            </button>
-          </div>
-        </div>
-      </div>
 
       {/* Grid of Backup Tools */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -326,14 +264,6 @@ export const DatabaseBackup: React.FC<DatabaseBackupProps> = ({
           </table>
         </div>
       </div>
-
-      {/* phpMyAdmin Modal */}
-      {showPhpMyAdmin && (
-        <PhpMyAdminModal
-          dossiers={dossiers}
-          onClose={() => setShowPhpMyAdmin(false)}
-        />
-      )}
     </div>
   );
 };
