@@ -19,6 +19,12 @@ return new class extends Migration
 {
     private function foreignKeyExists(string $table, string $constraint): bool
     {
+        // SQLite: constraints already created inline by the baseline migration;
+        // ALTER-based FK checks are not supported on this driver.
+        if (DB::getDriverName() === 'sqlite') {
+            return true;
+        }
+
         if (DB::getDriverName() === 'pgsql') {
             $row = DB::selectOne(
                 "SELECT con.conname FROM pg_constraint con
