@@ -545,10 +545,14 @@ export const DossierList: React.FC<DossierListProps> = ({
                       <h2 className="text-base font-bold text-slate-900">
                         {dossier.candidate.fullNameAr}
                       </h2>
-                      <span className="text-xs text-slate-500 font-sans" dir="ltr">
-                        ({dossier.candidate.fullNameFr})
-                      </span>
-                      <span className="text-slate-300">·</span>
+                      {dossier.candidate.fullNameFr && (
+                        <>
+                          <span className="text-xs text-slate-500 font-sans" dir="ltr">
+                            ({dossier.candidate.fullNameFr})
+                          </span>
+                          <span className="text-slate-300">·</span>
+                        </>
+                      )}
                       <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded">
                         {dossier.candidate.grade}
                       </span>

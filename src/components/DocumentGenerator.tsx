@@ -338,7 +338,7 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
             <div className="bg-slate-50 p-4 rounded border border-slate-200 text-xs font-sans space-y-2">
               <div className="font-bold text-slate-800 border-b border-slate-200 pb-1">أنا الموقع أسفله:</div>
               <div className="grid grid-cols-2 gap-3">
-                <div><strong>الاسم والنسب:</strong> {candidate.fullNameAr} ({candidate.fullNameFr})</div>
+                <div><strong>الاسم والنسب:</strong> {candidate.fullNameAr}{candidate.fullNameFr ? ` (${candidate.fullNameFr})` : ''}</div>
                 <div><strong>رقم بطاقة التعريف الوطنية:</strong> {candidate.cin}</div>
                 <div><strong>رقم التأجير (PPR):</strong> {candidate.ppr}</div>
                 <div><strong>الإطار:</strong> {candidate.grade}</div>
@@ -431,7 +431,7 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
               <div>
                 <div className="font-bold text-slate-800 border-b border-slate-200 pb-1 mb-2">1. هوية المترشح(ة)</div>
                 <div className="space-y-1">
-                  <div><strong>الاسم الكامل:</strong> {candidate.fullNameAr} ({candidate.fullNameFr})</div>
+                  <div><strong>الاسم الكامل:</strong> {candidate.fullNameAr}{candidate.fullNameFr ? ` (${candidate.fullNameFr})` : ''}</div>
                   <div><strong>رقم التأجير (PPR):</strong> {candidate.ppr}</div>
                   <div><strong>رقم ب.ت.و (CIN):</strong> {candidate.cin}</div>
                   <div><strong>الإطار الحالي:</strong> {candidate.grade}</div>

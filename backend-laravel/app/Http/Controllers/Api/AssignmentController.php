@@ -40,7 +40,7 @@ class AssignmentController extends Controller
             'candidat.ppr' => 'required|string|max:20',
             'candidat.cin' => 'nullable|string|max:20',
             'candidat.nom_ar' => 'required|string|max:150',
-            'candidat.nom_fr' => 'required|string|max:150',
+            'candidat.nom_fr' => 'nullable|string|max:150',
             'candidat.telephone' => 'nullable|string|max:20',
             'candidat.email' => 'nullable|email',
             'candidat.cadre' => 'required|string|max:150',
@@ -113,6 +113,9 @@ class AssignmentController extends Controller
 
         $demande = DB::transaction(function () use ($validated, $scores, $documentFlags, $numeroDossier) {
             $candidatData = $validated['candidat'];
+            // ConvertEmptyStringsToNull turns the unused Latin name into null,
+            // which the NOT NULL column rejects.
+            $candidatData['nom_fr'] = $candidatData['nom_fr'] ?? '';
             $candidat = Candidat::updateOrCreate(
                 ['ppr' => $candidatData['ppr']],
                 collect($candidatData)->except('ppr')->all()

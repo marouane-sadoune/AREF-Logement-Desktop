@@ -58,8 +58,12 @@ export const DossierDetailModal: React.FC<DossierDetailModalProps> = ({
             </div>
             <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
               <span>{candidate.fullNameAr}</span>
-              <span className="text-xs font-normal text-slate-400 font-sans">({candidate.fullNameFr})</span>
-              <span className="text-slate-400 text-sm">·</span>
+              {candidate.fullNameFr && (
+                <>
+                  <span className="text-xs font-normal text-slate-400 font-sans">({candidate.fullNameFr})</span>
+                  <span className="text-slate-400 text-sm">·</span>
+                </>
+              )}
               <span className="text-xs font-semibold text-emerald-300">{candidate.grade}</span>
             </h2>
           </div>
