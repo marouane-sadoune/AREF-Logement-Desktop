@@ -596,11 +596,20 @@ export const DossierList: React.FC<DossierListProps> = ({
 
                       {/* Barème points badge */}
                       <div className="flex items-center gap-1.5 text-xs text-slate-700 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-md">
-                        <span>مجموع النقط:</span>
-                        <span className="font-mono font-bold text-slate-900 text-sm">
-                          {dossier.bareme.totalPts}
-                        </span>
-                        <span className="text-[10px] text-slate-500">نقطة بالشبكة المعيارية</span>
+                        {dossier.housingRequest.housingType === 'fonction' ? (
+                          <>
+                            <span className="font-bold text-slate-900 text-sm">بدون تنقيط</span>
+                            <span className="text-[10px] text-slate-500">(يُسند بحكم المسؤولية)</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>مجموع النقط:</span>
+                            <span className="font-mono font-bold text-slate-900 text-sm">
+                              {dossier.bareme.totalPts}
+                            </span>
+                            <span className="text-[10px] text-slate-500">نقطة بالشبكة المعيارية</span>
+                          </>
+                        )}
                       </div>
 
                       {/* Housing Spec */}

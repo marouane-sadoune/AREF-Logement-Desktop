@@ -129,6 +129,9 @@ export const DossierForm: React.FC<DossierFormProps> = ({
   // Auto calculate bareme
   const bareme = calculateBareme(candidate, situationFamiliale, housingRequest);
 
+  // المذكرة 40: السكن الوظيفي يُسند بحكم المسؤولية والمهام، بدون شبكة تنقيط ولا ترتيب.
+  const isFonction = housingRequest.housingType === 'fonction';
+
   // Files staged for the 6 mandatory supporting documents (step 4). They are
   // uploaded to the backend once the dossier itself has been saved -- a new
   // dossier only gets a real id at that point -- so the DP agent can inspect
@@ -175,6 +178,18 @@ export const DossierForm: React.FC<DossierFormProps> = ({
     });
   };
 
+  // One birth certificate (عقد ازدياد) per child, staged under
+  // `situationFamilialeEnfants_N` and uploaded together on save.
+  const handleChildCertFileChange = (childNumber: number, file: File | null) => {
+    setDocFiles(prev => ({ ...prev, [`situationFamilialeEnfants_${childNumber}`]: file || undefined }));
+    if (file) {
+      setDocuments(prev => ({
+        ...prev,
+        situationFamiliale: { ...prev.situationFamiliale, childrenCertificates: true, present: true },
+      }));
+    }
+  };
+
   const toggleSituationFamilialeFlag = (
     flagKey: 'marriageCert' | 'spouseAttestation' | 'childrenCertificates',
     checked: boolean
@@ -197,18 +212,34 @@ export const DossierForm: React.FC<DossierFormProps> = ({
       if (sub) return ((documents.situationFamiliale as any)[`${sub.flagKey}FileName`] as string | undefined);
       return (documents[k as keyof RequiredDocumentsChecklist] as { fileName?: string }).fileName;
     };
+    const childCertNames = (documents.situationFamiliale.childrenCertificatesFileNames || []).filter(Boolean);
     const files = (groupKeys ?? [])
       .filter((k) => nameOf(k))
-      .map((k) => ({ key: k, name: DOC_LABELS_AR[k] ?? nameOf(k)!, fileName: nameOf(k), url: getDossierDocumentUrl(dossierId, k) }));
-    const idx = Math.max(0, files.findIndex((e) => e.key === clickedKey));
+      .flatMap((k) => {
+        // Multiple birth certificates: expand into one carousel entry per child.
+        if (k === 'situationFamilialeEnfants' && childCertNames.length > 1) {
+          return childCertNames.map((nm, i) => ({
+            key: `${k}_${i + 1}`,
+            name: `ج. عقد الازدياد ${i + 1}`,
+            fileName: nm,
+            url: getDossierDocumentUrl(dossierId, k, i),
+          }));
+        }
+        return [{ key: k, name: DOC_LABELS_AR[k] ?? nameOf(k)!, fileName: nameOf(k), url: getDossierDocumentUrl(dossierId, k) }];
+      });
+    const clickedEntry = files.find((e) => e.key === clickedKey)
+      ?? (/^situationFamilialeEnfants_\d+$/.test(clickedKey) && childCertNames.length <= 1
+        ? files.find((e) => e.key === 'situationFamilialeEnfants')
+        : undefined);
+    const idx = Math.max(0, files.findIndex((e) => e.key === clickedEntry?.key));
     setPreviewDocData({
       id: clickedKey,
-      titleAr: DOC_LABELS_AR[clickedKey] ?? clickedKey,
+      titleAr: clickedEntry?.name ?? DOC_LABELS_AR[clickedKey] ?? clickedKey,
       descAr: '',
       isPresent: true,
       legalizationNeeded: false,
-      fileName: nameOf(clickedKey),
-      fileUrl: getDossierDocumentUrl(dossierId, clickedKey),
+      fileName: clickedEntry?.fileName ?? nameOf(clickedKey),
+      fileUrl: clickedEntry?.url ?? getDossierDocumentUrl(dossierId, clickedKey),
       files: files.length > 1 ? files : undefined,
       initialIndex: idx,
     });
@@ -357,7 +388,19 @@ export const DossierForm: React.FC<DossierFormProps> = ({
       situationFamiliale,
       housingRequest,
       documents,
-      bareme,
+      bareme: isFonction
+        ? {
+            seniorityGeneralPts: 0,
+            seniorityEtablissementPts: 0,
+            scalePts: 0,
+            maritalPts: 0,
+            childrenPts: 0,
+            responsibilityBonus: 0,
+            performancePts: 0,
+            ruralBonusPts: 0,
+            totalPts: 0
+          }
+        : bareme,
       registreLogementId,
       auditHistory: initialDossier ? initialDossier.auditHistory : [
         {
@@ -384,8 +427,14 @@ export const DossierForm: React.FC<DossierFormProps> = ({
     { number: 2, label: 'الوضع العائلي', icon: Users },
     { number: 3, label: 'السكن المطلوب', icon: Home },
     { number: 4, label: 'الوثائق الست المطلوبة', icon: FileCheck },
-    { number: 5, label: 'احتساب شبكة التنقيط', icon: Calculator }
+    ...(isFonction
+      ? []
+      : [{ number: 5, label: 'احتساب شبكة التنقيط', icon: Calculator }])
   ];
+
+  useEffect(() => {
+    if (isFonction && activeStep === 5) setActiveStep(4);
+  }, [isFonction, activeStep]);
 
   return (
     <>
@@ -695,67 +744,29 @@ export const DossierForm: React.FC<DossierFormProps> = ({
               </div>
 
               {situationFamiliale.maritalStatus === 'marie' && (
-                <>
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">{candidate.gender === 'female' ? 'اسم ونسب الزوج' : 'اسم ونسب الزوجة'}</label>
-                    <input
-                      type="text"
-                      placeholder={candidate.gender === 'female' ? 'الاسم الكامل للزوج' : 'الاسم الكامل للزوجة'}
-                      value={situationFamiliale.spouseName}
-                      onChange={(e) => setSituationFamiliale({ ...situationFamiliale, spouseName: e.target.value })}
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
-                    />
+                <div className="space-y-2">
+                  <label className="block font-semibold text-slate-700">{candidate.gender === 'female' ? 'هل الزوج يمارس وظيفة عمومية؟' : 'هل الزوجة تمارس وظيفة عمومية؟'}</label>
+                  <div className="flex items-center gap-4 pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="spouseOfficial"
+                        checked={situationFamiliale.spouseIsPublicOfficial}
+                        onChange={() => setSituationFamiliale({ ...situationFamiliale, spouseIsPublicOfficial: true })}
+                      />
+                      <span>نعم ({candidate.gender === 'female' ? 'موظف بالقطاع العام' : 'موظفة بالقطاع العام'})</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="spouseOfficial"
+                        checked={!situationFamiliale.spouseIsPublicOfficial}
+                        onChange={() => setSituationFamiliale({ ...situationFamiliale, spouseIsPublicOfficial: false })}
+                      />
+                      <span>لا (قطاع خاص / لا يعمل)</span>
+                    </label>
                   </div>
-
-                  <div className="space-y-2">
-                    <label className="block font-semibold text-slate-700">{candidate.gender === 'female' ? 'هل الزوج موظف عمومي؟' : 'هل الزوجة موظفة عمومية؟'}</label>
-                    <div className="flex items-center gap-4 pt-1">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="spouseOfficial"
-                          checked={situationFamiliale.spouseIsPublicOfficial}
-                          onChange={() => setSituationFamiliale({ ...situationFamiliale, spouseIsPublicOfficial: true })}
-                        />
-                        <span>نعم ({candidate.gender === 'female' ? 'موظف بالقطاع العام' : 'موظفة بالقطاع العام'})</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="spouseOfficial"
-                          checked={!situationFamiliale.spouseIsPublicOfficial}
-                          onChange={() => setSituationFamiliale({ ...situationFamiliale, spouseIsPublicOfficial: false })}
-                        />
-                        <span>لا (قطاع خاص / لا يعمل)</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {situationFamiliale.spouseIsPublicOfficial && (
-                    <>
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">الإدارة المشغلة للزوج(ة)</label>
-                        <input
-                          type="text"
-                          placeholder="مثال: وزارة التربية الوطنية أو وزارة الصحة"
-                          value={situationFamiliale.spouseAdministration}
-                          onChange={(e) => setSituationFamiliale({ ...situationFamiliale, spouseAdministration: e.target.value })}
-                          className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">رقم تأجير الزوج(ة) (PPR)</label>
-                        <input
-                          type="text"
-                          placeholder="رقم التأجير إن وجد"
-                          value={situationFamiliale.spousePPR}
-                          onChange={(e) => setSituationFamiliale({ ...situationFamiliale, spousePPR: e.target.value })}
-                          className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-mono"
-                        />
-                      </div>
-                    </>
-                  )}
-                </>
+                </div>
               )}
             </div>
           </div>
@@ -801,7 +812,7 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                 </select>
                 <span className="text-[10px] text-slate-400">
                   {housingRequest.housingType === 'fonction'
-                    ? 'يخصص للمدير، الحراس العامين، النظار، والمقتصدين لضرورة المصلحة المطلقة.'
+                    ? 'يُسند بحكم المسؤولية والمهام للمدير والحارس العام والنظّار والمقتصدين: معفى من شبكة التنقيط ومن الترتيب.'
                     : 'يمنح لباقي الأطر التعليمية والإدارية بناءً على التنافس وشبكة التنقيط.'}
                 </span>
               </div>
@@ -925,11 +936,18 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                 {SITUATION_FAMILIALE_SUB_DOCS.map((sub) => {
                   const staged = docFiles[sub.fileKey];
                   const uploadedName = (documents.situationFamiliale as any)[`${sub.flagKey}FileName`] as string | undefined;
+                  // عقود الازدياد: خانة رفع مستقلة لكل طفل (عدد الأطفال > 0).
+                  const isChildrenRow = sub.flagKey === 'childrenCertificates' && situationFamiliale.childrenCount > 0;
+                  const uploadedChildNames = documents.situationFamiliale.childrenCertificatesFileNames || [];
                   return (
                     <div key={sub.fileKey} className="grid grid-cols-1 items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-xs sm:grid-cols-[minmax(0,1fr)_13rem]">
                       <div className="min-w-0 space-y-1">
                         <div className="font-semibold text-slate-800">{sub.titleAr}</div>
-                        <div className="text-slate-500 text-[11px]">{sub.detailAr}</div>
+                        <div className="text-slate-500 text-[11px]">
+                          {isChildrenRow
+                            ? `عقد ازدياد لكل طفل معال: ${situationFamiliale.childrenCount} عقود.`
+                            : sub.detailAr}
+                        </div>
                       </div>
                       <div className="flex w-full flex-col gap-2 sm:w-52">
                         <label className="flex min-h-10 items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700">
@@ -941,6 +959,46 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                             className="h-4 w-4 shrink-0 cursor-pointer rounded accent-emerald-600"
                           />
                         </label>
+                        {isChildrenRow ? (
+                          <div className="space-y-2">
+                            {Array.from({ length: situationFamiliale.childrenCount }, (_, i) => i + 1).map((n) => {
+                              const stageKey = `situationFamilialeEnfants_${n}`;
+                              const stagedChild = docFiles[stageKey];
+                              const uploadedChild = uploadedChildNames[n - 1];
+                              return (
+                                <div key={stageKey} className="rounded-md border border-slate-200 bg-slate-50 p-2">
+                                  <div className="mb-1.5 text-[11px] font-bold text-slate-700">عقد الازدياد رقم {n}</div>
+                                  <input
+                                    type="file"
+                                    id={`dossier-file-${stageKey}`}
+                                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                    onChange={(e) => handleChildCertFileChange(n, e.target.files?.[0] || null)}
+                                    className="peer sr-only"
+                                  />
+                                  <label
+                                    htmlFor={`dossier-file-${stageKey}`}
+                                    className="flex min-h-9 cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-[11px] font-semibold text-slate-700 transition-colors hover:border-emerald-500 hover:bg-emerald-50"
+                                  >
+                                    <Upload className="h-3.5 w-3.5 text-emerald-700" />
+                                    <span>اختيار عقد الازدياد</span>
+                                  </label>
+                                  {stagedChild ? (
+                                    <span className="mt-1 block truncate text-left text-[10px] text-emerald-700" title={stagedChild.name}>{stagedChild.name}</span>
+                                  ) : uploadedChild && initialDossier?.id ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => openDocPreview(stageKey, SITUATION_FAMILIALE_SUB_DOCS.map((s) => s.fileKey))}
+                                      className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                                    >
+                                      <span>&#128270;</span> معاينة العقد
+                                    </button>
+                                  ) : null}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <>
                         <div className="min-w-0">
                           <input
                             type="file"
@@ -968,6 +1026,8 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                           >
                             <span>&#128270;</span> معاينة الملف
                           </button>
+                        )}
+                          </>
                         )}
                       </div>
                     </div>
@@ -1002,7 +1062,7 @@ export const DossierForm: React.FC<DossierFormProps> = ({
         )}
 
         {/* STEP 5: احتساب شبكة التنقيط */}
-        {activeStep === 5 && (
+        {activeStep === 5 && !isFonction && (
           <div className="space-y-4">
             <div className="border-b border-slate-200 pb-2">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -1137,7 +1197,7 @@ export const DossierForm: React.FC<DossierFormProps> = ({
               إلغاء
             </button>
 
-            {activeStep < 5 ? (
+            {activeStep < (isFonction ? 4 : 5) ? (
               <button
                 type="button"
                 onClick={() => setActiveStep(activeStep + 1)}

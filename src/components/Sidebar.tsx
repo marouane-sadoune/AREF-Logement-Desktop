@@ -143,8 +143,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     ...(permissions.canAccessDatabaseSettings ? [{
       id: 'database' as ActiveTab,
-      label: 'قاعدة البيانات (MySQL / phpMyAdmin)',
-      sublabel: 'DB: aref_oriental',
+      label: 'قاعدة البيانات والنسخ الاحتياطي',
+      sublabel: 'SQLite — تصدير واسترجاع',
       icon: Database
     }] : []),
   ];

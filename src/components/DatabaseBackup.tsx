@@ -248,7 +248,11 @@ export const DatabaseBackup: React.FC<DatabaseBackupProps> = ({
                     {Object.values(d.documents).filter(doc => doc.present).length} / 6
                   </td>
                   <td className="p-2 border border-slate-200 font-mono font-bold text-slate-900">
-                    {d.bareme.totalPts}
+                    {d.housingRequest.housingType === 'fonction' ? (
+                      <span className="text-[10px] font-sans font-normal text-slate-500">بدون (وظيفي)</span>
+                    ) : (
+                      d.bareme.totalPts
+                    )}
                   </td>
                   <td className="p-2 border border-slate-200 text-[11px]">
                     {d.status === 'approved' && <span className="text-emerald-700 font-semibold">مصادق عليه</span>}

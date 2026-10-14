@@ -444,8 +444,9 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
                 <div className="font-bold text-slate-800 border-b border-slate-200 pb-1 mb-2">2. الوضع العائلي والسكن</div>
                 <div className="space-y-1">
                   <div><strong>الحالة العائلية:</strong> {family.maritalStatus === 'marie' ? 'متزوج(ة)' : 'عازب(ة) / مطلق(ة) / أرمل(ة)'}</div>
-                  <div><strong>{candidate.gender === 'female' ? 'اسم الزوج:' : 'اسم الزوجة:'}</strong> {family.spouseName || 'غير متوفر'}</div>
-                  <div><strong>{candidate.gender === 'female' ? 'عمل الزوج:' : 'عمل الزوجة:'}</strong> {family.spouseIsPublicOfficial ? (family.spouseAdministration || (candidate.gender === 'female' ? 'موظف عمومي' : 'موظفة عمومية')) : (candidate.gender === 'female' ? 'لا يمارس وظيفة عمومية' : 'لا تمارس وظيفة عمومية')}</div>
+                  {family.maritalStatus === 'marie' && (
+                    <div><strong>{candidate.gender === 'female' ? 'مزاولة الزوج لوظيفة عمومية:' : 'مزاولة الزوجة لوظيفة عمومية:'}</strong> {family.spouseIsPublicOfficial ? 'نعم' : 'لا'}</div>
+                  )}
                   <div><strong>عدد الأطفال المعالين:</strong> {family.childrenCount}</div>
                   <div><strong>نوع السكن المطلوب:</strong> {housing.housingType === 'fonction' ? 'سكن وظيفي' : 'سكن إداري'}</div>
                   <div><strong>المؤسسة المستهدفة:</strong> {housing.targetEtablissement}</div>

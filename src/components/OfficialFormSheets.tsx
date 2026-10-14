@@ -116,7 +116,7 @@ export const OfficialFormSheet: React.FC<OfficialFormSheetProps> = ({ dossier, d
 
   /* ============ المطبوع 2: محضر أشغال لجنة الإسناد ============ */
   if (formId === 'official_2') {
-    const competitors = dossiers.filter((d) => d.housingRequest.targetEtablissement === h.targetEtablissement);
+    const competitors = dossiers.filter((d) => d.housingRequest.targetEtablissement === h.targetEtablissement && d.housingRequest.housingType !== 'fonction');
     return (
       <div className="space-y-5 text-xs font-sans leading-relaxed">
         <div className="text-center space-y-1">

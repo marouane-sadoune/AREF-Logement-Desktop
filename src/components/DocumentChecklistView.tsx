@@ -301,7 +301,9 @@ export const DocumentChecklistView: React.FC<DocumentChecklistViewProps> = ({
                           files: doc.id === 'situationFamiliale' ? [
                             sf.marriageCertFileName && { name: 'أ. عقد الزواج', fileName: sf.marriageCertFileName, url: getDossierDocumentUrl(dossier.id, 'situationFamilialeContratMariage') },
                             sf.spouseAttestationFileName && { name: 'ب. شهادة عمل الزوج(ة)', fileName: sf.spouseAttestationFileName, url: getDossierDocumentUrl(dossier.id, 'situationFamilialeAttestationConjoint') },
-                            sf.childrenCertificatesFileName && { name: 'ج. بيان عدد الأطفال المعالين', fileName: sf.childrenCertificatesFileName, url: getDossierDocumentUrl(dossier.id, 'situationFamilialeEnfants') },
+                            ...(sf.childrenCertificatesFileNames && sf.childrenCertificatesFileNames.length > 1
+                              ? sf.childrenCertificatesFileNames.map((fn, i) => ({ name: `ج. عقد الازدياد ${i + 1}`, fileName: fn, url: getDossierDocumentUrl(dossier.id, 'situationFamilialeEnfants', i) }))
+                              : sf.childrenCertificatesFileName ? [{ name: 'ج. بيان عدد الأطفال المعالين', fileName: sf.childrenCertificatesFileName, url: getDossierDocumentUrl(dossier.id, 'situationFamilialeEnfants') }] : []),
                           ].filter(Boolean) as { name: string; fileName?: string; url?: string }[] : undefined,
                         });
                       }}

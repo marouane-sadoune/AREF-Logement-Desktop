@@ -1,6 +1,6 @@
 ﻿import { HousingDossier, DossierStatus, EvictionProcedure, RegistreLogement } from '../types/housing';
 
-const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1';
+export const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1';
 
 async function request(path: string, options: RequestInit = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -60,6 +60,19 @@ function inferAuditStage(decision: string, index: number): string {
 function fileNameFromPath(path?: string | null): string | undefined {
   if (!path) return undefined;
   return path.split('/').pop();
+}
+
+// The children-certificate column may hold a JSON array of storage paths
+// (one birth certificate per child) or a legacy single path.
+function documentPaths(value?: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed.filter(Boolean);
+  } catch {
+    // not JSON — plain single path
+  }
+  return [value];
 }
 
 // Maps the flat Laravel demandes_logement JSON shape (with nested
@@ -130,8 +143,9 @@ export function mapApiToDossier(api: any): HousingDossier {
         marriageCertFileName: fileNameFromPath(docs.situation_familiale_contrat_mariage_path),
         spouseAttestation: !!docs.situation_familiale_attestation_conjoint_path,
         spouseAttestationFileName: fileNameFromPath(docs.situation_familiale_attestation_conjoint_path),
-        childrenCertificates: !!docs.situation_familiale_enfants_path,
-        childrenCertificatesFileName: fileNameFromPath(docs.situation_familiale_enfants_path),
+        childrenCertificates: documentPaths(docs.situation_familiale_enfants_path).length > 0,
+        childrenCertificatesFileName: fileNameFromPath(documentPaths(docs.situation_familiale_enfants_path)[0]),
+        childrenCertificatesFileNames: documentPaths(docs.situation_familiale_enfants_path).map((p) => fileNameFromPath(p) || ''),
       },
       engagementHonneur: { present: !!docs.engagement_honneur, fileName: fileNameFromPath(docs.engagement_honneur_path) },
       pvInstallation: { present: !!docs.pv_installation, fileName: fileNameFromPath(docs.pv_installation_path) },
@@ -306,10 +320,33 @@ export async function uploadDossierDocument(
   return body;
 }
 
+// Uploads all staged birth certificates (عقود الازدياد) for a dossier in
+// one request — one file per child — as `files[]` on the children key.
+export async function uploadChildrenCertificates(
+  dossierId: string,
+  files: File[]
+): Promise<{ fileNames: string[] }> {
+  const formData = new FormData();
+  files.forEach((file) => formData.append('files[]', file));
+
+  const res = await fetch(`${API_BASE}/assignments/${dossierId}/documents/situation_familiale_enfants`, {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+    body: formData,
+  });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(body?.message || `${res.status} ${res.statusText}`);
+  }
+  return body;
+}
+
 // URL to view/download an already-uploaded supporting document.
-export function getDossierDocumentUrl(dossierId: string, docKey: string): string {
+// `index` selects one file when the key stores several (birth certificates).
+export function getDossierDocumentUrl(dossierId: string, docKey: string, index?: number): string {
   const backendKey = SUPPORTING_DOC_KEYS[docKey];
-  return `${API_BASE}/assignments/${dossierId}/documents/${backendKey}`;
+  const url = `${API_BASE}/assignments/${dossierId}/documents/${backendKey}`;
+  return index === undefined ? url : `${url}?index=${index}`;
 }
 
 // ===== مساطر الإفراغ (المحور 4 من المذكرة 40) =====

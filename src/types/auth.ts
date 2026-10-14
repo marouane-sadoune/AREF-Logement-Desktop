@@ -182,7 +182,7 @@ export function getRolePermissions(role: UserRole): RolePermissions {
         canApproveFinal: false,
         canPrintOfficialContracts: false,
         canManageUsers: false,
-        canAccessDatabaseSettings: false,
+        canAccessDatabaseSettings: true,
         filterByOwnDPOnly: false
       };
 
@@ -196,7 +196,7 @@ export function getRolePermissions(role: UserRole): RolePermissions {
         canApproveFinal: true,
         canPrintOfficialContracts: true,
         canManageUsers: false,
-        canAccessDatabaseSettings: false,
+        canAccessDatabaseSettings: true,
         filterByOwnDPOnly: false
       };
 

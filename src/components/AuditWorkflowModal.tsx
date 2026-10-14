@@ -338,7 +338,9 @@ export const AuditWorkflowModal: React.FC<AuditWorkflowModalProps> = ({
             <div className="font-bold text-slate-800 flex items-center justify-between">
               <span>تدقيق الوثائق الست الإلزامية للملف:</span>
               <span className="font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                مجموع النقط: {dossier.bareme.totalPts} نقطة
+                {dossier.housingRequest.housingType === 'fonction'
+                  ? 'بدون تنقيط (يُسند بحكم المسؤولية)'
+                  : `مجموع النقط: ${dossier.bareme.totalPts} نقطة`}
               </span>
             </div>
 
@@ -367,7 +369,9 @@ export const AuditWorkflowModal: React.FC<AuditWorkflowModalProps> = ({
                         files: key === 'situationFamiliale' ? [
                           (document as any).marriageCertFileName && { name: 'أ. عقد الزواج', fileName: (document as any).marriageCertFileName, url: getDossierDocumentUrl(dossier.id, 'situationFamilialeContratMariage') },
                           (document as any).spouseAttestationFileName && { name: 'ب. شهادة عمل الزوج/الزوجة', fileName: (document as any).spouseAttestationFileName, url: getDossierDocumentUrl(dossier.id, 'situationFamilialeAttestationConjoint') },
-                          (document as any).childrenCertificatesFileName && { name: 'ج. بيان عدد الأطفال المعالين', fileName: (document as any).childrenCertificatesFileName, url: getDossierDocumentUrl(dossier.id, 'situationFamilialeEnfants') },
+                          ...(((document as any).childrenCertificatesFileNames && (document as any).childrenCertificatesFileNames.length > 1)
+                            ? (document as any).childrenCertificatesFileNames.map((fn: string, i: number) => ({ name: `ج. عقد الازدياد ${i + 1}`, fileName: fn, url: getDossierDocumentUrl(dossier.id, 'situationFamilialeEnfants', i) }))
+                            : (document as any).childrenCertificatesFileName ? [{ name: 'ج. بيان عدد الأطفال المعالين', fileName: (document as any).childrenCertificatesFileName, url: getDossierDocumentUrl(dossier.id, 'situationFamilialeEnfants') }] : []),
                         ].filter(Boolean) as { name: string; fileName?: string; url?: string }[] : undefined,
                       });
                     }}

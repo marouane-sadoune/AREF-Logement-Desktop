@@ -144,10 +144,19 @@ function HousingWorkspace() {
     const filesToUpload = Object.entries(docFiles || {}).filter(
       (entry): entry is [string, File] => !!entry[1]
     );
+    const isChildCert = ([key]: [string, File]) => /^situationFamilialeEnfants_\d+$/.test(key);
+    const childCerts = filesToUpload
+      .filter(isChildCert)
+      .sort((a, b) => Number(a[0].split('_')[1]) - Number(b[0].split('_')[1]))
+      .map(([, file]) => file);
+    const otherFiles = filesToUpload.filter((e) => !isChildCert(e));
     if (filesToUpload.length > 0) {
       try {
+        if (childCerts.length > 0) {
+          await api.uploadChildrenCertificates(dossierId, childCerts);
+        }
         await Promise.all(
-          filesToUpload.map(([key, file]) => api.uploadDossierDocument(dossierId, key, file))
+          otherFiles.map(([key, file]) => api.uploadDossierDocument(dossierId, key, file))
         );
         const refreshed = await api.fetchDossier(dossierId);
         setDossiers((prev) => prev.map((d) => (d.id === dossierId ? refreshed : d)));
@@ -370,7 +379,11 @@ function HousingWorkspace() {
 
                       <div className="text-xs text-slate-600 flex items-center justify-between pt-1 border-t border-slate-100">
                         <span>نوع السكن: <strong>{d.housingRequest.housingType === 'fonction' ? 'وظيفي' : 'إداري'}</strong></span>
-                        <span>مجموع النقط: <strong className="font-mono text-emerald-800">{d.bareme.totalPts}</strong></span>
+                        {d.housingRequest.housingType === 'fonction' ? (
+                          <span>التنقيط: <strong className="text-emerald-800">بدون (بحكم المسؤولية)</strong></span>
+                        ) : (
+                          <span>مجموع النقط: <strong className="font-mono text-emerald-800">{d.bareme.totalPts}</strong></span>
+                        )}
                       </div>
 
                       <StatusTimeline dossier={d} />

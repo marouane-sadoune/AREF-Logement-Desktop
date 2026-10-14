@@ -39,6 +39,7 @@ export interface SituationFamilialeDocs {
   spouseAttestationFileName?: string;
   childrenCertificates: boolean;
   childrenCertificatesFileName?: string;
+  childrenCertificatesFileNames?: string[];
   notes?: string;
   fileName?: string;
 }

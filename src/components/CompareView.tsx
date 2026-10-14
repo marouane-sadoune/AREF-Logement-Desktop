@@ -11,6 +11,8 @@ export const CompareView: React.FC<CompareViewProps> = ({ dossiers }) => {
   const groups = useMemo(() => {
     const map = new Map<string, HousingDossier[]>();
     for (const d of dossiers) {
+      // السكن الوظيفي يُسند بحكم المسؤولية: لا يخضع للتنقيط ولا للترتيب
+      if (d.housingRequest.housingType === 'fonction') continue;
       const name = d.housingRequest.targetEtablissement || d.candidate.currentEtablissement || '—';
       // Same establishment name can exist in several DPs/cities — keep them separate
       const key = `${name} · ${d.candidate.commune || '—'} · ${d.candidate.directionProvinciale}`;

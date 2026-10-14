@@ -40,17 +40,43 @@ class DocumentController extends Controller
     /**
      * Upload one of the 6 supporting documents for a dossier, so the DP
      * agent can inspect it later (step 4 "Dossier de Demande").
+     *
+     * `situation_familiale_enfants` is special: one birth certificate per
+     * child, uploaded together as `files[]` and stored as a JSON array of
+     * paths in the single `situation_familiale_enfants_path` column.
      */
     public function uploadSupportingDocument(Request $request, $dossierId, string $docKey): JsonResponse
     {
         abort_unless(in_array($docKey, self::SUPPORTING_DOC_KEYS, true), 404);
 
-        $request->validate([
-            'file' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:10240',
-        ]);
-
         $dossier = DemandeLogement::findOrFail($dossierId);
         $document = DocumentFourni::firstOrCreate(['numero_dossier' => $dossier->numero_dossier]);
+
+        $fileRule = 'file|mimes:pdf,jpg,jpeg,png,webp|max:10240';
+
+        if ($docKey === 'situation_familiale_enfants') {
+            $request->validate(['files' => 'required|array|min:1', 'files.*' => $fileRule]);
+
+            $new = [];
+            foreach ($request->file('files') as $file) {
+                $new[] = $file->store("dossiers/{$dossier->numero_dossier}", 'local');
+            }
+
+            $document->update([
+                'situation_familiale_enfants_path' => json_encode(array_merge(
+                    self::decodeChildrenPaths($document->situation_familiale_enfants_path),
+                    $new
+                )),
+                'situation_familiale' => true,
+            ]);
+
+            return response()->json([
+                'message' => 'تم رفع عقود الازدياد بنجاح',
+                'fileNames' => array_map('basename', $new),
+            ]);
+        }
+
+        $request->validate(['file' => 'required|'.$fileRule]);
 
         $path = $request->file('file')->store("dossiers/{$dossier->numero_dossier}", 'local');
 
@@ -64,6 +90,20 @@ class DocumentController extends Controller
             'message' => 'تم رفع الوثيقة بنجاح',
             'fileName' => basename($path),
         ]);
+    }
+
+    /**
+     * The children-certificate column holds either a JSON array of paths
+     * (multi-child) or a plain single path from earlier uploads.
+     */
+    private static function decodeChildrenPaths(?string $value): array
+    {
+        if (empty($value)) {
+            return [];
+        }
+        $decoded = json_decode($value, true);
+
+        return is_array($decoded) ? $decoded : [$value];
     }
 
     /**
@@ -89,9 +129,10 @@ class DocumentController extends Controller
 
     /**
      * Stream a previously uploaded supporting document so it can be
-     * inspected (viewed/downloaded) by the DP agent.
+     * inspected (viewed/downloaded) by the DP agent. Birth certificates
+     * are addressed by position: `?index=0..N-1` (default: first).
      */
-    public function downloadSupportingDocument($dossierId, string $docKey): StreamedResponse
+    public function downloadSupportingDocument(Request $request, $dossierId, string $docKey): StreamedResponse
     {
         abort_unless(in_array($docKey, self::SUPPORTING_DOC_KEYS, true), 404);
 
@@ -99,6 +140,11 @@ class DocumentController extends Controller
         $document = DocumentFourni::where('numero_dossier', $dossier->numero_dossier)->firstOrFail();
 
         $path = $document->{"{$docKey}_path"};
+        if ($docKey === 'situation_familiale_enfants') {
+            $paths = self::decodeChildrenPaths($path);
+            $index = max(0, (int) $request->query('index', 0));
+            $path = $paths[$index] ?? ($paths[0] ?? null);
+        }
         abort_if(empty($path) || !Storage::disk('local')->exists($path), 404);
 
         return Storage::disk('local')->response($path);
