@@ -44,6 +44,8 @@ export const SUPPORTING_DOC_KEYS: Record<string, string> = {
   situationFamilialeEnfants: 'situation_familiale_enfants',
   engagementHonneur: 'engagement_honneur',
   pvInstallation: 'pv_installation',
+  ficheVisite: 'fiche_visite',
+  ficheControle: 'fiche_controle',
 };
 
 function inferAuditStage(decision: string, index: number): string {
@@ -149,6 +151,8 @@ export function mapApiToDossier(api: any): HousingDossier {
       },
       engagementHonneur: { present: !!docs.engagement_honneur, fileName: fileNameFromPath(docs.engagement_honneur_path) },
       pvInstallation: { present: !!docs.pv_installation, fileName: fileNameFromPath(docs.pv_installation_path) },
+      ficheVisite: { present: !!docs.fiche_visite, fileName: fileNameFromPath(docs.fiche_visite_path) },
+      ficheControle: { present: !!docs.fiche_controle, fileName: fileNameFromPath(docs.fiche_controle_path) },
     },
     bareme: {
       seniorityGeneralPts: b.pts_anciennete_generale ?? 0,
@@ -210,11 +214,12 @@ function buildCreatePayload(dossier: HousingDossier) {
       direction_provinciale: c.directionProvinciale,
       aref: c.aref,
       situation_familiale: f.maritalStatus,
-      nom_conjoint: f.spouseName,
-      conjoint_fonctionnaire: f.spouseIsPublicOfficial,
-      administration_conjoint: f.spouseAdministration,
-      ppr_conjoint: f.spousePPR,
-      nombre_enfants: f.childrenCount,
+      // مسطرة السكن الوظيفي لا تسأل عن مهنة الزوج(ة) ولا عدد الأطفال: لا تُخزَّن قيم لم تُدخل.
+      nom_conjoint: h.housingType === 'fonction' ? null : f.spouseName,
+      conjoint_fonctionnaire: h.housingType === 'fonction' ? false : f.spouseIsPublicOfficial,
+      administration_conjoint: h.housingType === 'fonction' ? null : f.spouseAdministration,
+      ppr_conjoint: h.housingType === 'fonction' ? null : f.spousePPR,
+      nombre_enfants: h.housingType === 'fonction' ? 0 : f.childrenCount,
       merdoudia: c.performanceRating ?? null,
       milieu_rural: !!c.isRuralArea,
       franchise_rurale: !!c.isRuralBranch,
@@ -244,6 +249,8 @@ function buildCreatePayload(dossier: HousingDossier) {
       situation_familiale: docs.situationFamiliale.present,
       engagement_honneur: docs.engagementHonneur.present,
       pv_installation: docs.pvInstallation.present,
+      fiche_visite: docs.ficheVisite?.present ?? false,
+      fiche_controle: docs.ficheControle?.present ?? false,
     },
   };
 }

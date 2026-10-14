@@ -10,7 +10,8 @@ import {
   CheckCircle2,
   Lock,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  FileCheck
 } from 'lucide-react';
 
 export const RegulationsGuide: React.FC = () => {
@@ -140,6 +141,21 @@ export const RegulationsGuide: React.FC = () => {
                 <strong>محضر الالتحاق بالمؤسسة (PV d'installation):</strong> يثبت تعيين الموظف الفعلي بالمؤسسة التي يوجد بها السكن.
               </div>
             </div>
+          </div>
+
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-950 space-y-1.5">
+            <div className="font-bold flex items-center gap-1.5">
+              <FileCheck className="w-4 h-4 text-emerald-700" />
+              <span>مسطرة السكن الوظيفي بحكم المسؤولية والمهام: بدون تباري ولا تنقيط</span>
+            </div>
+            <p>
+              المدير والحارس العام والنظّار والمقتصدون المعينون بحكم المهام لا يشاركون في التباري: لا شبكة تنقيط ولا ترتيب ولا لجنة إسناد، والسكن يُسند بمجرد التعيين في المنصب. يكتفي ملفهم بـ:
+            </p>
+            <ul className="list-disc pr-5 space-y-1">
+              <li>الالتزام والتصريح بالشرف مصحح الإمضاء — <strong>المطبوع رقم 3</strong>;</li>
+              <li>بطاقة معاينة السكن — <strong>المطبوع رقم 5</strong>;</li>
+              <li>بطاقة مراقبة السكن — <strong>المطبوع رقم 9</strong>، توقيع المستفيد والمكلف بتدبير السكنيات بالنيابة أو المديرية الإقليمية.</li>
+            </ul>
           </div>
         </div>
       )

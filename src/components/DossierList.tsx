@@ -27,7 +27,7 @@ import {
   X,
   Archive
 } from 'lucide-react';
-import { HousingDossier, DossierStatus } from '../types/housing';
+import { HousingDossier, DossierStatus, requiredDocumentKeys } from '../types/housing';
 import { useAuth } from '../context/AuthContext';
 import { isArchivable, closureAgeLabel, getClosureDate } from '../utils/archive';
 
@@ -148,16 +148,12 @@ export const DossierList: React.FC<DossierListProps> = ({
     }
   };
 
-  const countPresentDocuments = (dossier: HousingDossier) => {
-    let count = 0;
-    if (dossier.documents.demandeManuscrite.present) count++;
-    if (dossier.documents.copieCIN.present) count++;
-    if (dossier.documents.attestationTravail.present) count++;
-    if (dossier.documents.situationFamiliale.present) count++;
-    if (dossier.documents.engagementHonneur.present) count++;
-    if (dossier.documents.pvInstallation.present) count++;
-    return count;
-  };
+  // الوثائق الإلزامية تختلف بالمسطرة: 3 للوظيفي، 6 للإداري، و5 للعازب(ة).
+  const requiredDocKeys = (dossier: HousingDossier) =>
+    requiredDocumentKeys(dossier.housingRequest.housingType, dossier.situationFamiliale.maritalStatus);
+
+  const countPresentDocuments = (dossier: HousingDossier) =>
+    requiredDocKeys(dossier).filter((key) => dossier.documents[key]?.present).length;
 
   return (
     <div className="space-y-6">
@@ -452,7 +448,7 @@ export const DossierList: React.FC<DossierListProps> = ({
             {isDpAgent && <span className="text-blue-700 font-bold mr-1">({currentUser.dpNameAr})</span>}
           </span>
           <span className="text-slate-400">
-            الوثائق المطلوبة: 6 وثائق إلزامية حسب المذكرة 40
+            الوثائق المطلوبة: 6 للسكن الإداري · 3 للسكن الوظيفي (المذكرة 40)
           </span>
         </div>
       </div>
@@ -510,8 +506,9 @@ export const DossierList: React.FC<DossierListProps> = ({
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {filteredDossiers.map((dossier) => {
+            const requiredCount = requiredDocKeys(dossier).length;
             const docsCount = countPresentDocuments(dossier);
-            const isComplete = docsCount === 6;
+            const isComplete = docsCount === requiredCount;
 
             return (
               <div
@@ -590,11 +587,11 @@ export const DossierList: React.FC<DossierListProps> = ({
                           : 'bg-amber-50 text-amber-800 border-amber-200'
                       }`}>
                         <FileCheck className="w-3.5 h-3.5" />
-                        <span>الوثائق المطلوبة: <strong>{docsCount} / 6</strong></span>
+                        <span>الوثائق المطلوبة: <strong>{docsCount} / {requiredCount}</strong></span>
                         {isComplete ? (
                           <span className="text-[10px] text-emerald-600 font-normal">(الملف مكتمل)</span>
                         ) : (
-                          <span className="text-[10px] text-amber-600 font-normal">({6 - docsCount} وثائق متبقية)</span>
+                          <span className="text-[10px] text-amber-600 font-normal">({requiredCount - docsCount} وثائق متبقية)</span>
                         )}
                       </div>
 

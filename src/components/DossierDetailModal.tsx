@@ -105,7 +105,9 @@ export const DossierDetailModal: React.FC<DossierDetailModalProps> = ({
                 : 'text-slate-600 hover:bg-slate-200'
             }`}
           >
-            تدقيق الوثائق الست الإلزامية
+            {dossier.housingRequest.housingType === 'fonction'
+              ? 'تدقيق وثائق السكن الوظيفي (3 وثائق)'
+              : 'تدقيق الوثائق الست الإلزامية'}
           </button>
 
           <button

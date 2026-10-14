@@ -20,6 +20,7 @@ import {
   SituationFamilialeInfo, 
   HousingRequestInfo,
   RequiredDocumentsChecklist,
+  requiredDocumentKeys,
   MOROCCAN_AREFS,
   MOROCCAN_DIRECTORATES,
   MOROCCAN_GRADES,
@@ -53,6 +54,8 @@ const DOC_LABELS_AR: Record<string, string> = {
   situationFamilialeEnfants: '4-ج. بيان عدد الأطفال المعالين',
   engagementHonneur: '5. مطبوع الالتزام والتصريح بالشرف (Engagement)',
   pvInstallation: '6. محضر الالتحاق بالمؤسسة (PV d\'installation)',
+  ficheVisite: 'بطاقة معاينة السكن (المطبوع 5)',
+  ficheControle: 'بطاقة مراقبة السكن (المطبوع 9)',
 };
 
 export const DossierForm: React.FC<DossierFormProps> = ({
@@ -122,7 +125,9 @@ export const DossierForm: React.FC<DossierFormProps> = ({
       attestationTravail: { present: true },
       situationFamiliale: { present: true, marriageCert: true, spouseAttestation: false, childrenCertificates: true },
       engagementHonneur: { present: true, isLegalized: true },
-      pvInstallation: { present: true }
+      pvInstallation: { present: true },
+      ficheVisite: { present: false },
+      ficheControle: { present: false }
     }
   );
 
@@ -146,7 +151,7 @@ export const DossierForm: React.FC<DossierFormProps> = ({
 
   // The dossier links itself to the central housing register automatically:
   // the candidate applies for a dwelling located in their own workplace
-  // (step 1), so the vacant register entry of that établissement is the link.
+  // (step 2), so the vacant register entry of that établissement is the link.
   const autoMatchedLogement = availableLogements.find(
     (l) => l.etablissement.trim() === candidate.currentEtablissement.trim() && l.etablissement.trim() !== ''
   );
@@ -252,7 +257,8 @@ export const DossierForm: React.FC<DossierFormProps> = ({
   // their local file name until then.
   const renderDocFileControl = (key: keyof RequiredDocumentsChecklist) => {
     const staged = docFiles[key];
-    const uploadedName = (documents[key] as { fileName?: string }).fileName;
+    const status = (documents[key] ?? { present: false }) as { present: boolean; fileName?: string };
+    const uploadedName = status.fileName;
 
     return (
       <div className="flex w-full flex-col gap-2 sm:w-52">
@@ -260,7 +266,7 @@ export const DossierForm: React.FC<DossierFormProps> = ({
           <span className="text-[11px] font-medium">الوثيقة متوفرة</span>
         <input
           type="checkbox"
-          checked={documents[key].present}
+          checked={status.present}
           onChange={(e) => setDocuments({
             ...documents,
             [key]: { ...(documents[key] as any), present: e.target.checked }
@@ -312,25 +318,25 @@ export const DossierForm: React.FC<DossierFormProps> = ({
 
     if (!candidate.fullNameAr.trim() || !candidate.ppr.trim()) {
       alert('يرجى ملء الحقول الإلزامية: الاسم الكامل ورقم التأجير (PPR)');
-      setActiveStep(1);
+      setActiveStep(2);
       return;
     }
 
     if (!candidate.currentEtablissement.trim()) {
       alert('يرجى تحديد مقر العمل الحالي (المؤسسة التعليمية)');
-      setActiveStep(1);
+      setActiveStep(2);
       return;
     }
 
     if (!candidate.commune.trim()) {
       alert('يرجى تحديد المدينة \\ القرية التي تتواجد بها المؤسسة');
-      setActiveStep(1);
+      setActiveStep(2);
       return;
     }
 
     if (housingRequest.targetEtablissement.trim() !== candidate.currentEtablissement.trim()) {
       alert('يجب أن يكون السكن المطلوب داخل نفس المؤسسة التي يعمل بها الموظف');
-      setActiveStep(3);
+      setActiveStep(2);
       return;
     }
 
@@ -338,8 +344,8 @@ export const DossierForm: React.FC<DossierFormProps> = ({
       !candidate.currentEtablissement.trim() ||
       candidate.currentEtablissement.trim() === candidate.fullNameAr.trim()
     ) {
-      alert('المؤسسة التعليمية التي يوجد بها السكن يجب أن تكون اسم المؤسسة، وليس اسم المترشح. يرجى تصحيح حقل "مقر العمل الحالي" في الخطوة 1.');
-      setActiveStep(1);
+      alert('المؤسسة التعليمية التي يوجد بها السكن يجب أن تكون اسم المؤسسة، وليس اسم المترشح. يرجى تصحيح حقل "مقر العمل الحالي" في الخطوة 2.');
+      setActiveStep(2);
       return;
     }
 
@@ -414,7 +420,9 @@ export const DossierForm: React.FC<DossierFormProps> = ({
       dpAudit: initialDossier?.dpAudit || {
         auditedBy: 'مكتب السكنيات - DP',
         auditDate: new Date().toISOString().split('T')[0],
-        isComplete: Object.values(documents).every(d => d.present),
+        isComplete: requiredDocumentKeys(housingRequest.housingType, situationFamiliale.maritalStatus).every(
+          (k) => (documents[k] as { present: boolean } | undefined)?.present
+        ),
         bordereauNumber: `BORD/${new Date().getFullYear()}/${Math.floor(10 + Math.random() * 90)}`
       }
     };
@@ -423,10 +431,10 @@ export const DossierForm: React.FC<DossierFormProps> = ({
   };
 
   const steps = [
-    { number: 1, label: 'معلومات المترشح', icon: User },
-    { number: 2, label: 'الوضع العائلي', icon: Users },
-    { number: 3, label: 'السكن المطلوب', icon: Home },
-    { number: 4, label: 'الوثائق الست المطلوبة', icon: FileCheck },
+    { number: 1, label: 'السكن المطلوب', icon: Home },
+    { number: 2, label: 'معلومات المترشح', icon: User },
+    { number: 3, label: 'الوضع العائلي', icon: Users },
+    { number: 4, label: isFonction ? 'الوثائق المطلوبة' : 'الوثائق الست المطلوبة', icon: FileCheck },
     ...(isFonction
       ? []
       : [{ number: 5, label: 'احتساب شبكة التنقيط', icon: Calculator }])
@@ -493,13 +501,13 @@ export const DossierForm: React.FC<DossierFormProps> = ({
 
       {/* Form Body */}
       <form onSubmit={handleSubmit} className="p-6 space-y-6">
-        {/* STEP 1: معلومات المترشح */}
-        {activeStep === 1 && (
+        {/* STEP 2: معلومات المترشح */}
+        {activeStep === 2 && (
           <div className="space-y-4">
             <div className="border-b border-slate-200 pb-2 flex items-center justify-between">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <User className="w-4 h-4 text-emerald-600" />
-                <span>1. البيانات الشخصية والإدارية للموظف(ة)</span>
+                <span>2. البيانات الشخصية والإدارية للموظف(ة)</span>
               </h3>
               <span className="text-xs text-slate-500">* الحقول إلزامية للتدقيق الإداري</span>
             </div>
@@ -695,16 +703,18 @@ export const DossierForm: React.FC<DossierFormProps> = ({
           </div>
         )}
 
-        {/* STEP 2: الوضع العائلي */}
-        {activeStep === 2 && (
+        {/* STEP 3: الوضع العائلي */}
+        {activeStep === 3 && (
           <div className="space-y-4">
             <div className="border-b border-slate-200 pb-2">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Users className="w-4 h-4 text-emerald-600" />
-                <span>{candidate.gender === 'female' ? '2. الوضع العائلي للمترشحة (Situation Familiale) والوثائق المثبتة' : '2. الوضع العائلي للمترشح (Situation Familiale) والوثائق المثبتة'}</span>
+                <span>{candidate.gender === 'female' ? '3. الوضع العائلي للمترشحة (Situation Familiale)' : '3. الوضع العائلي للمترشح (Situation Familiale)'}{!isFonction && ' والوثائق المثبتة'}</span>
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                حسب المذكرة 40: أعزب = 0 نقطة، نقطتان عن الزوج(ة) غير العامل(ة)، ونقطة عن كل طفل في حدود 3 أطفال.
+                {isFonction
+                  ? 'في مسطرة السكن الوظيفي تُكتفى بالحالة العائلية (متزوج(ة) أو أعزب) للمعلومة: لا نقطة عن الزوج(ة) ولا عن الأطفال، ولا تُطلب وثائق الوضع العائلي.'
+                  : 'حسب المذكرة 40: أعزب = 0 نقطة، نقطتان عن الزوج(ة) غير العامل(ة)، ونقطة عن كل طفل في حدود 3 أطفال.'}
               </p>
             </div>
 
@@ -715,7 +725,12 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                   value={situationFamiliale.maritalStatus}
                   onChange={(e) => {
                     const ms = e.target.value as any;
-                    setSituationFamiliale({ ...situationFamiliale, maritalStatus: ms });
+                    // الوظيفي لا يُنقَّط: تُكتفى بالحالة العائلية بدون معطيات الزوج(ة) والأطفال.
+                    setSituationFamiliale({
+                      ...situationFamiliale,
+                      maritalStatus: ms,
+                      ...(ms === 'celibataire' ? { spouseIsPublicOfficial: false, childrenCount: 0 } : {}),
+                    });
                     setDocuments(prev => ({
                       ...prev,
                       situationFamiliale: { ...prev.situationFamiliale, present: ms === 'celibataire' ? true : prev.situationFamiliale.present },
@@ -723,13 +738,14 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                   }}
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 focus:bg-white"
                 >
-                  <option value="marie">متزوج(ة) - 2 نقط (زوج غير عامل)</option>
-                  <option value="celibataire">عازب(ة) - 0 نقطة</option>
-                  <option value="divorce">مطلق(ة) - 0 نقطة</option>
-                  <option value="veuf">أرمل(ة) - 0 نقطة</option>
+                  <option value="marie">{isFonction ? 'متزوج(ة)' : 'متزوج(ة) - 2 نقط (زوج غير عامل)'}</option>
+                  <option value="celibataire">{isFonction ? 'عازب(ة)' : 'عازب(ة) - 0 نقطة'}</option>
+                  <option value="divorce">{isFonction ? 'مطلق(ة)' : 'مطلق(ة) - 0 نقطة'}</option>
+                  <option value="veuf">{isFonction ? 'أرمل(ة)' : 'أرمل(ة) - 0 نقطة'}</option>
                 </select>
               </div>
 
+              {!isFonction && (
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">عدد الأطفال المعالين (تحت سن الرشد)</label>
                 <input
@@ -742,8 +758,9 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                 />
                 <span className="text-[10px] text-slate-400">نقطة عن كل طفل في حدود 3 أطفال (أقصاه 3 نقط)</span>
               </div>
+              )}
 
-              {situationFamiliale.maritalStatus === 'marie' && (
+              {!isFonction && situationFamiliale.maritalStatus === 'marie' && (
                 <div className="space-y-2">
                   <label className="block font-semibold text-slate-700">{candidate.gender === 'female' ? 'هل الزوج يمارس وظيفة عمومية؟' : 'هل الزوجة تمارس وظيفة عمومية؟'}</label>
                   <div className="flex items-center gap-4 pt-1">
@@ -772,17 +789,29 @@ export const DossierForm: React.FC<DossierFormProps> = ({
           </div>
         )}
 
-        {/* STEP 3: مواصفات السكن المطلوب */}
-        {activeStep === 3 && (
+        {/* STEP 1: مواصفات السكن المطلوب */}
+        {activeStep === 1 && (
           <div className="space-y-4">
             <div className="border-b border-slate-200 pb-2">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Home className="w-4 h-4 text-emerald-600" />
-                <span>3. مواصفات السكن الإداري أو الوظيفي المطلوب</span>
+                <span>1. مواصفات السكن الإداري أو الوظيفي المطلوب</span>
               </h3>
               <p className="text-xs text-slate-500 mt-1">
                 تحديد طبيعة السكن طبقاً للمذكرة 40 (وظيفي بحكم ضرورة المهام أم إداري حسب الاستحقاق).
               </p>
+            </div>
+
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-[11px] leading-relaxed text-emerald-900">
+              <span className="font-bold">نوع السكن يحدد المسطرة:</span>
+              <ul className="mt-1 list-disc space-y-0.5 pr-4">
+                <li>
+                  <strong>السكن الوظيفي</strong>: لا تباري ولا لجنة إسناد ولا شبكة تنقيط — يُسند تلقائياً بمجرد التعيين في المنصب، ويكتفي الملف بالمطبوع 3 (الالتزام والتصريح بالشرف) وببطاقتي المعاينة والمراقبة (المطبوعان 5 و9).
+                </li>
+                <li>
+                  <strong>السكن الإداري</strong>: ملف ترشيح كامل من ست وثائق، مرتَّب فيه المترشح بشبكة التنقيط المعيارية أمام لجنة الإسناد.
+                </li>
+              </ul>
             </div>
 
             {/* Auto link with the central housing register (by candidate's établissement) */}
@@ -823,10 +852,15 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                   type="text"
                   required
                   readOnly
+                  placeholder="يُحدَّد تلقائياً بعد إدخال مقر العمل الحالي في الخطوة 2"
                   value={housingRequest.targetEtablissement}
-                  className="w-full p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 font-semibold cursor-not-allowed"
+                  className="w-full p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 font-semibold cursor-not-allowed placeholder:font-normal placeholder:text-blue-400"
                 />
-                <span className="text-[10px] text-slate-500">يجب أن يطابق مقر العمل الحالي للموظف.</span>
+                <span className="text-[10px] text-slate-500">
+                  {housingRequest.targetEtablissement
+                    ? 'يجب أن يطابق مقر العمل الحالي للموظف.'
+                    : 'ينتقل السكن تلقائياً إلى مؤسسة عمل المترشح(ة) كما تُدخلها في الخطوة 2.'}
+                </span>
               </div>
 
               <div>
@@ -875,21 +909,62 @@ export const DossierForm: React.FC<DossierFormProps> = ({
           </div>
         )}
 
-        {/* STEP 4: التحقق من الوثائق الـ 6 الإلزامية */}
+        {/* STEP 4: الوثائق الإلزامية (مختلفة حسب نوع السكن) */}
         {activeStep === 4 && (
           <div className="space-y-4">
             <div className="border-b border-slate-200 pb-2">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <FileCheck className="w-4 h-4 text-emerald-600" />
-                <span>4. التحقق من الوثائق {situationFamiliale.maritalStatus === 'celibataire' ? 'الخمس' : 'الست'} الإلزامية المكونة للملف (Dossier de Demande)</span>
+                <span>
+                  {isFonction
+                    ? '4. الوثائق الثلاث المطلوبة في مسطرة السكن الوظيفي'
+                    : `4. التحقق من الوثائق ${situationFamiliale.maritalStatus === 'celibataire' ? 'الخمس' : 'الست'} الإلزامية المكونة للملف (Dossier de Demande)`}
+                </span>
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                {situationFamiliale.maritalStatus === 'celibataire'
+                {isFonction
+                  ? 'لا تباري ولا لجنة إسناد ولا شبكة تنقيط: يُكتفى بالالتزام (المطبوع 3) وباستكمال بطاقتي المعاينة والمراقبة (المطبوعان 5 و9) بعد الترخيص بالسكن.'
+                  : situationFamiliale.maritalStatus === 'celibataire'
                   ? 'المترشح(ة) عازب(ة): لا تُطلب وثائق الوضع العائلي. يكفي 5 وثائق إلزامية.'
                   : 'هذه الوثائق تدقق بمصلحة الموارد البشرية بالمديرية الإقليمية (DP) قبل الإحالة على الأكاديمية الجهوية (AREF).'}
               </p>
             </div>
 
+            {isFonction && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs sm:grid-cols-[minmax(0,1fr)_13rem]">
+                  <div className="min-w-0 space-y-1">
+                    <div className="font-bold text-slate-900">1. مطبوع الالتزام والتصريح بالشرف (المطبوع رقم 3)</div>
+                    <div className="text-slate-500 text-[11px]">
+                      التزام مصحح الإمضاء يُقر فيه المستفيد باحترام بنود المذكرة 40 والتعهد بإفراغ السكن فور انتهاء المهام الموجبة للاستفادة.
+                    </div>
+                  </div>
+                  {renderDocFileControl('engagementHonneur')}
+                </div>
+
+                <div className="grid grid-cols-1 items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs sm:grid-cols-[minmax(0,1fr)_13rem]">
+                  <div className="min-w-0 space-y-1">
+                    <div className="font-bold text-slate-900">2. بطاقة معاينة السكن (المطبوع رقم 5)</div>
+                    <div className="text-slate-500 text-[11px]">
+                      معاينة سكنية للمترشح(ة) تُرفق بالملف وتُوقَّع من طرف المعني(ة) والمكلف(ة) بتدبير السكنيات.
+                    </div>
+                  </div>
+                  {renderDocFileControl('ficheVisite')}
+                </div>
+
+                <div className="grid grid-cols-1 items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs sm:grid-cols-[minmax(0,1fr)_13rem]">
+                  <div className="min-w-0 space-y-1">
+                    <div className="font-bold text-slate-900">3. بطاقة مراقبة السكن (المطبوع رقم 9)</div>
+                    <div className="text-slate-500 text-[11px]">
+                      بطاقة مراقبة للسكن الوظيفي توقع من طرف المستفيد والمكلف بتدبير السكن على صعيد النيابة أو المديرية الإقليمية.
+                    </div>
+                  </div>
+                  {renderDocFileControl('ficheControle')}
+                </div>
+              </div>
+            )}
+
+            {!isFonction && (
             <div className="space-y-3">
               {/* Doc 1 */}
               <div className="grid grid-cols-1 items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs sm:grid-cols-[minmax(0,1fr)_13rem]">
@@ -1058,6 +1133,7 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                 {renderDocFileControl('pvInstallation')}
               </div>
             </div>
+            )}
           </div>
         )}
 

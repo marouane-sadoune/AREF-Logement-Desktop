@@ -94,7 +94,35 @@ export interface RequiredDocumentsChecklist {
   situationFamiliale: SituationFamilialeDocs;
   engagementHonneur: RequiredDocumentStatus;
   pvInstallation: RequiredDocumentStatus;
+  // مسطرة السكن الوظيفي (المذكرة 40): المطبوع 5 بطاقة المعاينة و المطبوع 9 بطاقة المراقبة.
+  ficheVisite?: RequiredDocumentStatus;
+  ficheControle?: RequiredDocumentStatus;
 }
+
+// الوثائق الإلزامية حسب نوع السكن: الوظيفي بلا تباري ولا تنقيط، الإداري بملف كامل.
+export const DOCUMENTS_BY_HOUSING_TYPE: Record<'fonction' | 'administratif', (keyof RequiredDocumentsChecklist)[]> = {
+  fonction: ['engagementHonneur', 'ficheVisite', 'ficheControle'],
+  administratif: [
+    'demandeManuscrite',
+    'copieCIN',
+    'attestationTravail',
+    'situationFamiliale',
+    'engagementHonneur',
+    'pvInstallation',
+  ],
+};
+
+// العازب(ة) لا يُطلب منه(ها) وثيقة الوضع العائلي: تُحذف من اللازمة.
+export const requiredDocumentKeys = (
+  housingType: HousingType,
+  maritalStatus?: MaritalStatus
+): (keyof RequiredDocumentsChecklist)[] => {
+  const keys = DOCUMENTS_BY_HOUSING_TYPE[housingType === 'fonction' ? 'fonction' : 'administratif'];
+  if (housingType !== 'fonction' && maritalStatus === 'celibataire') {
+    return keys.filter((k) => k !== 'situationFamiliale');
+  }
+  return keys;
+};
 
 export interface BaremePoints {
   seniorityGeneralPts: number;

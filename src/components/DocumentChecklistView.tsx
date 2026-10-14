@@ -14,7 +14,7 @@ import {
   Printer
 } from 'lucide-react';
 import { DocumentPreviewCard, DocumentPreviewCardData } from './DocumentPreviewCard';
-import { HousingDossier } from '../types/housing';
+import { HousingDossier, requiredDocumentKeys } from '../types/housing';
 import { getDossierDocumentUrl } from '../api/client';
 
 interface DocumentChecklistViewProps {
@@ -44,7 +44,7 @@ export const DocumentChecklistView: React.FC<DocumentChecklistViewProps> = ({
       };
       onUpdateDossier(updated);
     } else {
-      const currentDoc = dossier.documents[docKey];
+      const currentDoc = dossier.documents[docKey] ?? { present: false };
       const updated = {
         ...dossier,
         documents: {
@@ -59,7 +59,11 @@ export const DocumentChecklistView: React.FC<DocumentChecklistViewProps> = ({
     }
   };
 
-  const requiredDocumentsMeta = [
+  // مسطرة السكن الوظيفي أخف: المطبوع 3 + بطاقتا المعاينة والمراقبة (5 و9)،
+  // بدون ملف تباري ولا شبكة تنقيط.
+  const isFonction = dossier.housingRequest.housingType === 'fonction';
+
+  const requiredDocumentsMeta = ([
     {
       id: 'demandeManuscrite',
       titleAr: '1. الطلب الخطي (Demande manuscrite)',
@@ -117,11 +121,34 @@ export const DocumentChecklistView: React.FC<DocumentChecklistViewProps> = ({
       canGenerate: true,
       generatorKey: 'pv_installation',
       legalizationNeeded: false
+    },
+    {
+      id: 'ficheVisite',
+      titleAr: "2. بطاقة معاينة السكن (المطبوع رقم 5)",
+      descAr: 'بطاقة معاينة السكن الوظيفي تُوقَّع من طرف المستفيد والمكلف(ة) بتدبير السكنيات، وتضم ضمن الوثائق المكونة للملف.',
+      isMandatory: true,
+      data: dossier.documents.ficheVisite ?? { present: false },
+      canGenerate: true,
+      generatorKey: 'official_5',
+      legalizationNeeded: false
+    },
+    {
+      id: 'ficheControle',
+      titleAr: "3. بطاقة مراقبة السكن (المطبوع رقم 9)",
+      descAr: 'بطاقة مراقبة السكن توقع من طرف المستفيد والمكلف بتدبير السكن على صعيد النيابة أو المديرية الإقليمية.',
+      isMandatory: true,
+      data: dossier.documents.ficheControle ?? { present: false },
+      canGenerate: true,
+      generatorKey: 'official_9',
+      legalizationNeeded: false
     }
-  ];
+  ] as any[]).filter((doc) =>
+    (requiredDocumentKeys(dossier.housingRequest.housingType, dossier.situationFamiliale.maritalStatus) as string[]).includes(doc.id)
+  ).map((doc, idx) => ({ ...doc, titleAr: doc.titleAr.replace(/^\s*\d+\.\s*/, `${idx + 1}. `) }));
 
   const presentCount = requiredDocumentsMeta.filter(doc => doc.data.present).length;
-  const isComplete = presentCount === 6;
+  const totalDocs = requiredDocumentsMeta.length;
+  const isComplete = presentCount === totalDocs;
 
   return (
     <>
@@ -141,19 +168,25 @@ export const DocumentChecklistView: React.FC<DocumentChecklistViewProps> = ({
                 <AlertTriangle className="w-5 h-5 text-amber-600" />
               )}
               <h3 className="font-bold text-sm">
-                {isComplete ? 'الملف الإداري مكتمل بجميع الوثائق المطلوبة' : 'ملف الترشيح غير مكتمل'}
+                {isComplete
+                  ? isFonction
+                    ? 'ملف السكن الوظيفي مكتمل الوثائق'
+                    : 'الملف الإداري مكتمل بجميع الوثائق المطلوبة'
+                  : 'ملف الترشيح غير مكتمل'}
               </h3>
             </div>
             <p className="text-xs opacity-90">
               {isComplete 
-                ? 'تم استيفاء جميع الوثائق الـ 6 المنصوص عليها بالمذكرة الوزارية رقم 40. الملف مؤهل للإحالة على اللجنة الإقليمية بالمديرية (DP).' 
-                : `تم التحقق من ${presentCount} وثائق من أصل 6. يرجى توفير الوثائق الناقصة قبل إرسال الملف للأكاديمية.`}
+                ? isFonction
+                  ? 'تم استيفاء وثائق مسطرة السكن الوظيفي (الالتزام + بطاقتا المعاينة والمراقبة). لا تباري ولا شبكة تنقيط: الملف يُحال للتأشير ثم الترخيص بالسكن.'
+                  : 'تم استيفاء جميع الوثائق المنصوص عليها بالمذكرة الوزارية رقم 40. الملف مؤهل للإحالة على اللجنة الإقليمية بالمديرية (DP).' 
+                : `تم التحقق من ${presentCount} وثائق من أصل ${totalDocs}. يرجى توفير الوثائق الناقصة قبل إرسال الملف للأكاديمية.`}
             </p>
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
             <div className="text-center bg-white/70 py-1.5 px-3 rounded-lg border border-slate-200">
-              <div className="text-lg font-mono font-bold leading-tight">{presentCount} / 6</div>
+              <div className="text-lg font-mono font-bold leading-tight">{presentCount} / {totalDocs}</div>
               <div className="text-[10px] text-slate-600">وثائق جاهزة</div>
             </div>
 

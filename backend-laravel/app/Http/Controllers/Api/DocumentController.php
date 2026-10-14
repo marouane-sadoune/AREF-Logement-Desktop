@@ -15,9 +15,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class DocumentController extends Controller
 {
     /**
-     * The 6 mandatory supporting documents (Note 40), keyed by the column
-     * prefix used in `documents_fournis` (both the boolean flag and the
-     * `{key}_path` file path share this prefix).
+     * The supporting documents of the file, keyed by the column prefix used
+     * in `documents_fournis` (both the boolean flag and the `{key}_path` file
+     * path share this prefix).
      */
     private const SUPPORTING_DOC_KEYS = [
         'demande_manuscrite',
@@ -29,6 +29,8 @@ class DocumentController extends Controller
         'situation_familiale_enfants',
         'engagement_honneur',
         'pv_installation',
+        'fiche_visite',
+        'fiche_controle',
     ];
 
     private const SITUATION_FAMILIALE_SUB_KEYS = [

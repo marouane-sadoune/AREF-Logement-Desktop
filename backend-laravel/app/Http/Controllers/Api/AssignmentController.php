@@ -93,6 +93,8 @@ class AssignmentController extends Controller
             'documents.situation_familiale' => 'sometimes|boolean',
             'documents.engagement_honneur' => 'sometimes|boolean',
             'documents.pv_installation' => 'sometimes|boolean',
+            'documents.fiche_visite' => 'sometimes|boolean',
+            'documents.fiche_controle' => 'sometimes|boolean',
         ]);
 
         $scoreFields = [

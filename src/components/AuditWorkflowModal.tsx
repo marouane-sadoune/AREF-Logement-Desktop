@@ -19,7 +19,7 @@ import {
   Check,
   Printer
 } from 'lucide-react';
-import { HousingDossier, DossierStatus } from '../types/housing';
+import { HousingDossier, DossierStatus, requiredDocumentKeys } from '../types/housing';
 import { useAuth } from '../context/AuthContext';
 import { getDossierDocumentUrl } from '../api/client';
 import { DocumentPreviewCard, DocumentPreviewCardData } from './DocumentPreviewCard';
@@ -101,14 +101,22 @@ export const AuditWorkflowModal: React.FC<AuditWorkflowModalProps> = ({
     }
   ];
 
-  const dossierDocuments = [
+  const isFonction = dossier.housingRequest.housingType === 'fonction';
+
+  const allDossierDocuments: { key: string; label: string; document: { present: boolean; fileName?: string; notes?: string } }[] = [
     { key: 'demandeManuscrite', label: 'الطلب الخطي', document: dossier.documents.demandeManuscrite },
     { key: 'copieCIN', label: 'نسخة بطاقة التعريف الوطنية', document: dossier.documents.copieCIN },
     { key: 'attestationTravail', label: 'شهادة العمل', document: dossier.documents.attestationTravail },
     { key: 'situationFamiliale', label: 'الوضع العائلي', document: dossier.documents.situationFamiliale },
-    { key: 'engagementHonneur', label: 'الالتزام والتصريح بالشرف', document: dossier.documents.engagementHonneur },
+    { key: 'engagementHonneur', label: 'الالتزام والتصريح بالشرف (المطبوع 3)', document: dossier.documents.engagementHonneur },
     { key: 'pvInstallation', label: 'محضر الالتحاق بالمؤسسة', document: dossier.documents.pvInstallation },
+    { key: 'ficheVisite', label: 'بطاقة معاينة السكن (المطبوع 5)', document: dossier.documents.ficheVisite ?? { present: false } },
+    { key: 'ficheControle', label: 'بطاقة مراقبة السكن (المطبوع 9)', document: dossier.documents.ficheControle ?? { present: false } },
   ];
+
+  const dossierDocuments = allDossierDocuments.filter(({ key }) =>
+    (requiredDocumentKeys(dossier.housingRequest.housingType, dossier.situationFamiliale.maritalStatus) as string[]).includes(key)
+  );
 
   // 1. DP Action: Audit and verify within DP
   const handleValidateDP = () => {
@@ -120,7 +128,9 @@ export const AuditWorkflowModal: React.FC<AuditWorkflowModalProps> = ({
         auditedBy: `${currentUser.fullName} (${currentUser.title})`,
         auditDate: new Date().toISOString().split('T')[0],
         isComplete: true,
-        dpNotes: comment || 'تم التدقيق والتأكد من مطابقة جميع الوثائق الست لمقتضيات المذكرة 40'
+        dpNotes: comment || (isFonction
+          ? 'تم التدقيق والتأكد من وثائق مسطرة السكن الوظيفي (الالتزام + بطاقتا المعاينة والمراقبة) لمقتضيات المذكرة 40'
+          : 'تم التدقيق والتأكد من مطابقة جميع الوثائق الست لمقتضيات المذكرة 40')
       }
     };
     onUpdateStatus(updated, 'under_review_dp', comment || `تدقيق ومطابقة الملف من طرف ${currentUser.fullName}`);
@@ -336,7 +346,7 @@ export const AuditWorkflowModal: React.FC<AuditWorkflowModalProps> = ({
           {/* Quick Summary of Documents Verification */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-2">
             <div className="font-bold text-slate-800 flex items-center justify-between">
-              <span>تدقيق الوثائق الست الإلزامية للملف:</span>
+              <span>تدقيق الوثائق الإلزامية للملف ({dossierDocuments.length}):</span>
               <span className="font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                 {dossier.housingRequest.housingType === 'fonction'
                   ? 'بدون تنقيط (يُسند بحكم المسؤولية)'
@@ -409,7 +419,7 @@ export const AuditWorkflowModal: React.FC<AuditWorkflowModalProps> = ({
                         <FileCheck className="w-3.5 h-3.5 text-amber-600" />
                         <span>تدقيق محلي بالمديرية (DP)</span>
                       </div>
-                      <div className="text-[10px] text-slate-500 mt-1">تأكيد اكتمال الوثائق الـ 6</div>
+                      <div className="text-[10px] text-slate-500 mt-1">تأكيد اكتمال الوثائق ({dossierDocuments.length})</div>
                     </button>
                   )}
 

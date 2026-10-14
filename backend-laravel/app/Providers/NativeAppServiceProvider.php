@@ -5,7 +5,6 @@ namespace App\Providers;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Native\Desktop\Facades\Window;
 use Native\Desktop\Contracts\ProvidesPhpIni;
 use Throwable;
@@ -52,9 +51,9 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
         // Seeding must never block the window from opening on a user's PC.
         try {
-            if (! Schema::hasTable('demandes_logement')) {
-                Artisan::call('native:migrate', ['--force' => true]);
-            }
+            // Always run pending migrations: an installed app only upgrades its
+            // schema this way, since its database outlives the build.
+            Artisan::call('native:migrate', ['--force' => true]);
 
             if (DB::table('demandes_logement')->count() === 0) {
                 // native:seed goes through Laravel's confirm()-in-production path,

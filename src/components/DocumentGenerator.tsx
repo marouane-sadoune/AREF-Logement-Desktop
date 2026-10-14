@@ -689,7 +689,9 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
                     <div className="text-[10px] text-emerald-800">({housing.housingType === 'fonction' ? 'سكن وظيفي' : 'سكن إداري'})</div>
                   </td>
                   <td className="border border-slate-300 p-2 font-mono font-bold">
-                    6 وثائق (ملف كامل مع الالتزام المصادق عليه)
+                    {housing.housingType === 'fonction'
+                      ? '3 وثائق (الالتزام + بطاقتا المعاينة والمراقبة)'
+                      : '6 وثائق (ملف كامل مع الالتزام المصادق عليه)'}
                   </td>
                   <td className="border border-slate-300 p-2 text-[11px] text-right">
                     ملف مستوفٍ لجميع المعايير المنصوص عليها بالمذكرة 40. نلتمس التفضل بالمصادقة على منح الترخيص باستغلال السكن.
