@@ -166,7 +166,6 @@ export const DossierDetailModal: React.FC<DossierDetailModalProps> = ({
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div><span className="text-slate-500">رقم التأجير (PPR):</span> <strong className="font-mono text-slate-800">{candidate.ppr}</strong></div>
-                  <div><span className="text-slate-500">رقم ب.ت.و (CIN):</span> <strong className="font-mono text-slate-800">{candidate.cin}</strong></div>
                   <div><span className="text-slate-500">الإطار الحالي:</span> <strong className="text-slate-800">{candidate.grade}</strong></div>
                   <div><span className="text-slate-500">السلم والرتبة:</span> <strong>السلم {candidate.scale} · الرتبة {candidate.echelon}</strong></div>
                   <div><span className="text-slate-500">الأقدمية العامة:</span> <strong>{candidate.seniorityGeneral} سنة</strong></div>
@@ -185,10 +184,12 @@ export const DossierDetailModal: React.FC<DossierDetailModalProps> = ({
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div><span className="text-slate-500">الحالة العائلية:</span> <strong>{situationFamiliale.maritalStatus === 'marie' ? 'متزوج(ة)' : 'عازب(ة)'}</strong></div>
-                  {situationFamiliale.maritalStatus === 'marie' && (
+                  {housingRequest.housingType !== 'fonction' && situationFamiliale.maritalStatus === 'marie' && (
                     <div><span className="text-slate-500">{dossier.candidate.gender === 'female' ? 'مزاولة الزوج لوظيفة عمومية:' : 'مزاولة الزوجة لوظيفة عمومية:'}</span> <strong>{situationFamiliale.spouseIsPublicOfficial ? 'نعم' : 'لا'}</strong></div>
                   )}
-                  <div><span className="text-slate-500">عدد الأطفال المعالين:</span> <strong className="font-mono">{situationFamiliale.childrenCount} أطفال</strong></div>
+                  {housingRequest.housingType !== 'fonction' && (
+                    <div><span className="text-slate-500">عدد الأطفال المعالين:</span> <strong className="font-mono">{situationFamiliale.childrenCount} أطفال</strong></div>
+                  )}
                 </div>
               </div>
 

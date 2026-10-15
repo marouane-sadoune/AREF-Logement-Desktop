@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { HousingDossier } from '../types/housing';
 import { INITIAL_DOSSIERS } from '../data/mockDossiers';
+import Swal from 'sweetalert2';
 
 interface DatabaseBackupProps {
   dossiers: HousingDossier[];
@@ -57,10 +58,22 @@ export const DatabaseBackup: React.FC<DatabaseBackupProps> = ({
           setSuccessMsg(`تم استيراد ${parsed.length} ملف ترشيح بنجاح.`);
           setTimeout(() => setSuccessMsg(null), 3500);
         } else {
-          alert('الملف المحدد لا يحتوي على بنية بيانات صحيحة لملفات الترشيح.');
+          Swal.fire({
+            icon: 'error',
+            title: 'ملف غير صالح',
+            text: 'الملف المحدد لا يحتوي على بنية بيانات صحيحة لملفات الترشيح.',
+            confirmButtonText: 'حسناً',
+            confirmButtonColor: '#059669',
+          });
         }
       } catch (err) {
-        alert('حدث خطأ أثناء قراءة ملف JSON. تأكد من سلامة الملف.');
+        Swal.fire({
+          icon: 'error',
+          title: 'خطأ',
+          text: 'حدث خطأ أثناء قراءة ملف JSON. تأكد من سلامة الملف.',
+          confirmButtonText: 'حسناً',
+          confirmButtonColor: '#059669',
+        });
       }
     };
     reader.readAsText(file);
@@ -171,12 +184,21 @@ export const DatabaseBackup: React.FC<DatabaseBackupProps> = ({
           </div>
 
           <button
-            onClick={() => {
-              if (window.confirm('هل أنت متأكد من رغبتك في استعادة الملفات النموذجية الافتراضية؟')) {
-                onResetDossiers();
-                setSuccessMsg('تمت استعادة الملفات النموذجية بنجاح.');
-                setTimeout(() => setSuccessMsg(null), 3000);
-              }
+            onClick={async () => {
+              const ok = await Swal.fire({
+                icon: 'warning',
+                title: 'استعادة الملفات النموذجية؟',
+                text: 'سيتم تعويض الملفات الحالية بالنماذج الافتراضية للمذكرة 40.',
+                showCancelButton: true,
+                confirmButtonText: 'نعم، استعد',
+                cancelButtonText: 'إلغاء',
+                confirmButtonColor: '#dc2626',
+                cancelButtonColor: '#64748b',
+              });
+              if (!ok.isConfirmed) return;
+              onResetDossiers();
+              setSuccessMsg('تمت استعادة الملفات النموذجية بنجاح.');
+              setTimeout(() => setSuccessMsg(null), 3000);
             }}
             className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >

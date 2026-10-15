@@ -24,6 +24,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { UserAccount, UserRole } from '../types/auth';
 import { ORIENTAL_DIRECTORATES } from '../types/housing';
+import Swal from 'sweetalert2';
 
 export const UserManagementView: React.FC = () => {
   const { currentUser, users, addUser, updateUser, deleteUser, toggleUserStatus, switchUser } = useAuth();
@@ -43,7 +44,13 @@ export const UserManagementView: React.FC = () => {
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFullName || !newUsername || !newEmail) {
-      alert('يرجى ملء جميع الحقول الإلزامية');
+      Swal.fire({
+        icon: 'warning',
+        title: 'حقل ناقص',
+        text: 'يرجى ملء جميع الحقول الإلزامية',
+        confirmButtonText: 'حسناً',
+        confirmButtonColor: '#059669',
+      });
       return;
     }
 
@@ -359,10 +366,18 @@ export const UserManagementView: React.FC = () => {
                         
                         {users.length > 1 && (
                           <button
-                            onClick={() => {
-                              if (window.confirm(`هل أنت متأكد من حذف الحساب "${user.fullName}"؟`)) {
-                                deleteUser(user.id);
-                              }
+                            onClick={async () => {
+                              const ok = await Swal.fire({
+                                icon: 'warning',
+                                title: 'حذف الحساب؟',
+                                text: `سيتم حذف حساب "${user.fullName}" نهائياً.`,
+                                showCancelButton: true,
+                                confirmButtonText: 'نعم، احذف',
+                                cancelButtonText: 'إلغاء',
+                                confirmButtonColor: '#dc2626',
+                                cancelButtonColor: '#64748b',
+                              });
+                              if (ok.isConfirmed) deleteUser(user.id);
                             }}
                             className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
                             title="حذف الحساب"

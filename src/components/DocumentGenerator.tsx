@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   Printer, 
   Download, 
@@ -9,7 +9,9 @@ import {
   Building, 
   User, 
   Calendar,
-  AlertCircle
+  AlertCircle,
+  PencilLine,
+  RotateCcw
 } from 'lucide-react';
 import { HousingDossier } from '../types/housing';
 import { PERFORMANCE_RATING_LABELS } from '../types/housing';
@@ -20,6 +22,27 @@ interface DocumentGeneratorProps {
   dossiers: HousingDossier[];
   selectedDossierId?: string;
   defaultDocType?: string;
+}
+
+const OVERRIDE_PREFIX = 'aref-doc-text:';
+
+function readDocOverrides(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(OVERRIDE_PREFIX)) {
+      out[key.slice(OVERRIDE_PREFIX.length)] = localStorage.getItem(key) || '';
+    }
+  }
+  return out;
+}
+
+// النص محرَّر محلياً من طرف المستخدم: نُجرِّده من السكربتات ومعالِجات الأحداث قبل إعادة إدراجه.
+function sanitizeDocHtml(html: string): string {
+  return html
+    .replace(/<\s*(script|style|iframe|object|embed|link|meta)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+    .replace(/<\s*(script|style|iframe|object|embed|link|meta)[^>]*\/?>/gi, '')
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
 }
 
 export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
@@ -35,6 +58,20 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
   );
 
   const activeDossier = dossiers.find((d) => d.id === selectedId) || dossiers[0];
+
+  // تحرير نص الوثيقة: كل تعديل يُخزَّن لملف+نموذج بعينه ويُطبع بدل النص المولَّد.
+  const [overrides, setOverrides] = useState<Record<string, string>>(readDocOverrides);
+  const [editing, setEditing] = useState(false);
+  const [bodyToken, setBodyToken] = useState(0);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const overrideKey = activeDossier ? `${activeDossier.id}:${activeDocType}` : '';
+
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el || editing) return;
+    const stored = overrideKey ? overrides[overrideKey] : undefined;
+    if (stored !== undefined && el.innerHTML !== stored) el.innerHTML = stored;
+  }, [overrideKey, overrides, editing, activeDossier, activeDocType]);
 
   const handlePrint = () => {
     window.print();
@@ -52,6 +89,32 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
   const family = activeDossier.situationFamiliale;
   const housing = activeDossier.housingRequest;
   const bareme = activeDossier.bareme;
+
+  const commitEdit = () => {
+    const el = bodyRef.current;
+    if (!el || !editing) return;
+    const html = sanitizeDocHtml(el.innerHTML);
+    localStorage.setItem(OVERRIDE_PREFIX + overrideKey, html);
+    setOverrides((prev) => ({ ...prev, [overrideKey]: html }));
+  };
+
+  const restoreOriginal = () => {
+    localStorage.removeItem(OVERRIDE_PREFIX + overrideKey);
+    setOverrides((prev) => {
+      const next = { ...prev };
+      delete next[overrideKey];
+      return next;
+    });
+    setBodyToken((t) => t + 1);
+  };
+
+  const switchTo = (select: () => void) => {
+    commitEdit();
+    setEditing(false);
+    select();
+  };
+
+  const hasOverride = overrides[overrideKey] !== undefined;
 
   const docTypes = [
     { 
@@ -93,6 +156,31 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {hasOverride && (
+              <button
+                onClick={restoreOriginal}
+                className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>استرجاع النص الأصلي</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                if (editing) commitEdit();
+                setEditing((prev) => !prev);
+              }}
+              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer ${
+                editing
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200'
+              }`}
+            >
+              <PencilLine className="w-4 h-4" />
+              <span>{editing ? 'إنهاء التحرير وحفظ التعديل' : 'تحرير نص الوثيقة'}</span>
+            </button>
+
             <button
               onClick={handlePrint}
               className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
@@ -103,6 +191,12 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
           </div>
         </div>
 
+        {editing && (
+          <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+            وضع التحرير مُفعَّل: انقر داخل الوثيقة (الفقرة، الجدول أو التاريخ) وعدّل النص مباشرة. يُحفظ التعديل لهذا الملف وهذا النموذج عند إنهاء التحرير، ولا يظهر أي أثر للتحرير في الطباعة.
+          </p>
+        )}
+
         {/* Dossier Selection & Doc Tabs */}
         <div className="flex flex-col md:flex-row gap-3 pt-2 border-t border-slate-100">
           <div className="w-full md:w-72 shrink-0">
@@ -111,7 +205,7 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
             </label>
             <select
               value={selectedId}
-              onChange={(e) => setSelectedId(e.target.value)}
+              onChange={(e) => switchTo(() => setSelectedId(e.target.value))}
               className="w-full py-1.5 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:border-emerald-500"
             >
               {dossiers.map((d) => (
@@ -131,7 +225,7 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
               {docTypes.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveDocType(tab.id)}
+                  onClick={() => switchTo(() => setActiveDocType(tab.id))}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                     activeDocType === tab.id
                       ? 'bg-slate-900 text-white shadow-xs'
@@ -155,6 +249,15 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
           subDepartment={activeDocType !== 'accord_attribution' ? `${candidate.directionProvinciale} · مصلحة الموارد البشرية والشؤون الإدارية · مكتب تدبير السكنيات` : undefined}
         />
 
+        {/* Editable document body: النص المولَّد قابل للتعديل اليدوي ويُخزَّن لكل ملف+نموذج */}
+        <div
+          key={`${overrideKey}#${bodyToken}`}
+          ref={bodyRef}
+          contentEditable={editing}
+          suppressContentEditableWarning
+          onBlur={commitEdit}
+          className={`space-y-6 ${editing ? 'doc-editing outline-none' : ''}`}
+        >
         {/* 0. رسالة الموافقة الرسمية الصادرة عند المصادقة على الطلب (Modèle Officiel AREF) */}
         {activeDocType === 'accord_attribution' && (
           <div className="space-y-6 text-[15px] font-serif leading-[1.8] text-slate-950 relative min-h-[700px] flex flex-col justify-between">
@@ -804,6 +907,7 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
         {activeDocType.startsWith('official_') && (
           <OfficialFormSheet dossier={activeDossier} dossiers={dossiers} formId={activeDocType} />
         )}
+        </div>
       </div>
 
     </div>

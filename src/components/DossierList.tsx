@@ -569,10 +569,6 @@ export const DossierList: React.FC<DossierListProps> = ({
                         <span className="font-mono font-semibold text-slate-800">{dossier.candidate.ppr}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className="text-slate-400">CIN:</span>
-                        <span className="font-mono font-semibold text-slate-800">{dossier.candidate.cin}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
                         <MapPin className="w-3.5 h-3.5 text-blue-600" />
                         <span className="font-bold text-slate-800">{dossier.candidate.directionProvinciale}</span>
                       </div>

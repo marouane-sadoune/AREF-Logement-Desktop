@@ -63,6 +63,7 @@ function HousingWorkspace() {
   const [selectedDossier, setSelectedDossier] = useState<HousingDossier | null>(null);
   const [editingDossier, setEditingDossier] = useState<HousingDossier | null>(null);
   const [auditDossier, setAuditDossier] = useState<HousingDossier | null>(null);
+  const [auditHousingFilter, setAuditHousingFilter] = useState<'all' | 'fonction' | 'administratif'>('all');
   const [printDossierId, setPrintDossierId] = useState<string | undefined>(undefined);
   const [defaultDocType, setDefaultDocType] = useState<string>('demande');
 
@@ -76,6 +77,10 @@ function HousingWorkspace() {
 
   const activeDossiers = visibleDossiers.filter((d) => !archivedIds.includes(d.id));
   const archivedDossiers = visibleDossiers.filter((d) => archivedIds.includes(d.id));
+
+  const filteredAuditDossiers = auditHousingFilter === 'all'
+    ? activeDossiers
+    : activeDossiers.filter((d) => d.housingRequest.housingType === auditHousingFilter);
 
   const handleArchiveDossier = (id: string) => {
     setArchivedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
@@ -126,7 +131,13 @@ function HousingWorkspace() {
         dossierId = created.id;
         setDossiers((prev) => [created, ...prev]);
       } catch (e) {
-        alert('فشل إنشاء الملف في الخادم: ' + (e as Error).message);
+        Swal.fire({
+          icon: 'error',
+          title: 'خطأ',
+          text: 'فشل إنشاء الملف في الخادم: ' + (e as Error).message,
+          confirmButtonText: 'حسناً',
+          confirmButtonColor: '#059669',
+        });
         return;
       }
     } else {
@@ -161,7 +172,13 @@ function HousingWorkspace() {
         const refreshed = await api.fetchDossier(dossierId);
         setDossiers((prev) => prev.map((d) => (d.id === dossierId ? refreshed : d)));
       } catch (e) {
-        alert('فشل رفع بعض الوثائق: ' + (e as Error).message);
+        Swal.fire({
+          icon: 'error',
+          title: 'خطأ',
+          text: 'فشل رفع بعض الوثائق: ' + (e as Error).message,
+          confirmButtonText: 'حسناً',
+          confirmButtonColor: '#059669',
+        });
       }
     }
 
@@ -169,14 +186,23 @@ function HousingWorkspace() {
     setActiveTab('dossiers');
   };
 
-  const handleDeleteDossier = (id: string) => {
-    if (window.confirm('هل أنت متأكد من حذف هذا الملف نهائياً من النظام؟')) {
-      setDossiers((prev) => prev.filter((d) => d.id !== id));
-      setArchivedIds((prev) => prev.filter((x) => x !== id));
-      if (selectedDossier?.id === id) setSelectedDossier(null);
-      if (editingDossier?.id === id) setEditingDossier(null);
-      if (auditDossier?.id === id) setAuditDossier(null);
-    }
+  const handleDeleteDossier = async (id: string) => {
+    const ok = await Swal.fire({
+      icon: 'warning',
+      title: 'حذف الملف نهائياً؟',
+      text: 'سيتم حذف ملف الترشيح ووثائقه من النظام ولا يمكن التراجع.',
+      showCancelButton: true,
+      confirmButtonText: 'نعم، احذف',
+      cancelButtonText: 'إلغاء',
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#64748b',
+    });
+    if (!ok.isConfirmed) return;
+    setDossiers((prev) => prev.filter((d) => d.id !== id));
+    setArchivedIds((prev) => prev.filter((x) => x !== id));
+    if (selectedDossier?.id === id) setSelectedDossier(null);
+    if (editingDossier?.id === id) setEditingDossier(null);
+    if (auditDossier?.id === id) setAuditDossier(null);
   };
 
   const handleUpdateStatus = async (
@@ -262,7 +288,7 @@ function HousingWorkspace() {
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-100 text-slate-900 select-none">
+    <div className="app-shell flex flex-col h-screen w-screen overflow-hidden bg-slate-100 text-slate-900 select-none">
       {/* Desktop App Window Chrome Title Bar */}
       <DesktopWindowChrome
         isFullscreen={isFullscreen}
@@ -271,7 +297,7 @@ function HousingWorkspace() {
       />
 
       {/* Main Desktop Workspace with Sidebar & Content Canvas */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="app-workspace flex flex-1 overflow-hidden">
         {/* Institutional Sidebar */}
         <Sidebar
           activeTab={activeTab}
@@ -344,7 +370,7 @@ function HousingWorkspace() {
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-bold text-blue-800 bg-blue-100 px-2 py-0.5 rounded">
+                      <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
                         الأكاديمية الجهوية للتربية والتكوين - جهة الشرق
                       </span>
                       <span className="text-xs text-slate-500">·</span>
@@ -359,11 +385,41 @@ function HousingWorkspace() {
                   </div>
                 </div>
 
+                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-2">
+                  {([
+                    { key: 'all', label: 'كل الملفات' },
+                    { key: 'administratif', label: 'سكن إداري (شبكة التنقيط)' },
+                    { key: 'fonction', label: 'سكن وظيفي (بحكم المسؤولية)' },
+                  ] as const).map((f) => {
+                    const count = f.key === 'all'
+                      ? activeDossiers.length
+                      : activeDossiers.filter((d) => d.housingRequest.housingType === f.key).length;
+                    const isActive = auditHousingFilter === f.key;
+                    return (
+                      <button
+                        key={f.key}
+                        onClick={() => setAuditHousingFilter(f.key)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
+                          isActive
+                            ? 'bg-emerald-600 text-white border-emerald-600'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        {f.label}
+                        <span className={`mr-1.5 font-mono ${isActive ? 'text-emerald-100' : 'text-slate-400'}`}>{count}</span>
+                      </button>
+                    );
+                  })}
+                  <span className="text-xs text-slate-500 mr-auto">
+                    عرض {filteredAuditDossiers.length} من أصل {activeDossiers.length} ملفات في المسار
+                  </span>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {activeDossiers.map((d) => (
+                  {filteredAuditDossiers.map((d) => (
                     <div
                       key={d.id}
-                      className="bg-white p-5 rounded-xl border border-slate-200 hover:border-blue-400 transition-colors shadow-2xs space-y-3"
+                      className="bg-white p-5 rounded-xl border border-slate-200 hover:border-emerald-400 transition-colors shadow-2xs space-y-3"
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
@@ -379,9 +435,7 @@ function HousingWorkspace() {
 
                       <div className="text-xs text-slate-600 flex items-center justify-between pt-1 border-t border-slate-100">
                         <span>نوع السكن: <strong>{d.housingRequest.housingType === 'fonction' ? 'وظيفي' : 'إداري'}</strong></span>
-                        {d.housingRequest.housingType === 'fonction' ? (
-                          <span>التنقيط: <strong className="text-emerald-800">بدون (بحكم المسؤولية)</strong></span>
-                        ) : (
+                        {d.housingRequest.housingType === 'administratif' && (
                           <span>مجموع النقط: <strong className="font-mono text-emerald-800">{d.bareme.totalPts}</strong></span>
                         )}
                       </div>
@@ -390,13 +444,25 @@ function HousingWorkspace() {
 
                       <button
                         onClick={() => setAuditDossier(d)}
-                        className="w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                        className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                       >
                         معالجة الإجراء والتدقيق الإداري
                       </button>
                     </div>
                   ))}
                 </div>
+
+                {filteredAuditDossiers.length === 0 && (
+                  <div className="bg-white p-8 rounded-xl border border-slate-200 text-center">
+                    <p className="text-sm font-bold text-slate-700">لا توجد ملفات بهذا النوع في مسار التدقيق حالياً.</p>
+                    <button
+                      onClick={() => setAuditHousingFilter('all')}
+                      className="mt-3 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer"
+                    >
+                      عرض كل الملفات
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 

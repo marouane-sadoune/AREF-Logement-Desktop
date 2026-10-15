@@ -31,6 +31,7 @@ import {
 import { calculateBareme } from '../utils/bareme';
 import { useAuth } from '../context/AuthContext';
 import { getDossierDocumentUrl, fetchLogements, createLogement } from '../api/client';
+import Swal from 'sweetalert2';
 import { DocumentPreviewCard, DocumentPreviewCardData } from './DocumentPreviewCard';
 
 interface DossierFormProps {
@@ -313,29 +314,38 @@ export const DossierForm: React.FC<DossierFormProps> = ({
     }
   }, [candidate.currentEtablissement, housingRequest.targetEtablissement]);
 
+  const warnField = (message: string) =>
+    Swal.fire({
+      icon: 'warning',
+      title: 'تحقق من المعطيات',
+      text: message,
+      confirmButtonText: 'حسناً',
+      confirmButtonColor: '#059669',
+    });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!candidate.fullNameAr.trim() || !candidate.ppr.trim()) {
-      alert('يرجى ملء الحقول الإلزامية: الاسم الكامل ورقم التأجير (PPR)');
+      warnField('يرجى ملء الحقول الإلزامية: الاسم الكامل ورقم التأجير (PPR)');
       setActiveStep(2);
       return;
     }
 
     if (!candidate.currentEtablissement.trim()) {
-      alert('يرجى تحديد مقر العمل الحالي (المؤسسة التعليمية)');
+      warnField('يرجى تحديد مقر العمل الحالي (المؤسسة التعليمية)');
       setActiveStep(2);
       return;
     }
 
     if (!candidate.commune.trim()) {
-      alert('يرجى تحديد المدينة \\ القرية التي تتواجد بها المؤسسة');
+      warnField('يرجى تحديد المدينة \\ القرية التي تتواجد بها المؤسسة');
       setActiveStep(2);
       return;
     }
 
     if (housingRequest.targetEtablissement.trim() !== candidate.currentEtablissement.trim()) {
-      alert('يجب أن يكون السكن المطلوب داخل نفس المؤسسة التي يعمل بها الموظف');
+      warnField('يجب أن يكون السكن المطلوب داخل نفس المؤسسة التي يعمل بها الموظف');
       setActiveStep(2);
       return;
     }
@@ -344,7 +354,7 @@ export const DossierForm: React.FC<DossierFormProps> = ({
       !candidate.currentEtablissement.trim() ||
       candidate.currentEtablissement.trim() === candidate.fullNameAr.trim()
     ) {
-      alert('المؤسسة التعليمية التي يوجد بها السكن يجب أن تكون اسم المؤسسة، وليس اسم المترشح. يرجى تصحيح حقل "مقر العمل الحالي" في الخطوة 2.');
+      warnField('المؤسسة التعليمية التي يوجد بها السكن يجب أن تكون اسم المؤسسة، وليس اسم المترشح. يرجى تصحيح حقل "مقر العمل الحالي" في الخطوة 2.');
       setActiveStep(2);
       return;
     }
@@ -500,7 +510,7 @@ export const DossierForm: React.FC<DossierFormProps> = ({
       </div>
 
       {/* Form Body */}
-      <form onSubmit={handleSubmit} className="p-6 space-y-6">
+      <form onSubmit={(e) => e.preventDefault()} className="p-6 space-y-6">
         {/* STEP 2: معلومات المترشح */}
         {activeStep === 2 && (
           <div className="space-y-4">
@@ -1275,6 +1285,7 @@ export const DossierForm: React.FC<DossierFormProps> = ({
 
             {activeStep < (isFonction ? 4 : 5) ? (
               <button
+                key="next-step"
                 type="button"
                 onClick={() => setActiveStep(activeStep + 1)}
                 className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold cursor-pointer"
@@ -1282,8 +1293,11 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                 المتابعة إلى الخطوة {activeStep + 1}
               </button>
             ) : (
+              // type="button" : تفادي حفظ تلقائي عند إعادة استخدام نفس العقدة من زر «المتابعة»
               <button
-                type="submit"
+                key="save-dossier"
+                type="button"
+                onClick={(e) => handleSubmit(e as unknown as React.FormEvent)}
                 className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-xs cursor-pointer"
               >
                 <Save className="w-4 h-4" />

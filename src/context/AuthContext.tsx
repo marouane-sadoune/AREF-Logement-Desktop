@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { UserAccount, UserRole, RolePermissions, INITIAL_USERS, getRolePermissions } from '../types/auth';
+import Swal from 'sweetalert2';
 
 interface AuthContextType {
   currentUser: UserAccount;
@@ -127,7 +128,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const deleteUser = (userId: string) => {
     if (users.length <= 1) {
-      alert('لا يمكن حذف المستخدم الأخير بالنظام');
+      Swal.fire({
+        icon: 'warning',
+        title: 'عملية غير ممكنة',
+        text: 'لا يمكن حذف المستخدم الأخير بالنظام',
+        confirmButtonText: 'حسناً',
+        confirmButtonColor: '#059669',
+      });
       return;
     }
     setUsers(prev => prev.filter(u => u.id !== userId));
