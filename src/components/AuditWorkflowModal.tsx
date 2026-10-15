@@ -19,7 +19,7 @@ import {
   Check,
   Printer
 } from 'lucide-react';
-import { HousingDossier, DossierStatus, requiredDocumentKeys } from '../types/housing';
+import { HousingDossier, DossierStatus, requiredDocumentKeys, ELIGIBILITY_QUESTIONS, eligibilityAnswerOk, isNonOwnershipCertificateExpired } from '../types/housing';
 import { useAuth } from '../context/AuthContext';
 import { getDossierDocumentUrl } from '../api/client';
 import { DocumentPreviewCard, DocumentPreviewCardData } from './DocumentPreviewCard';
@@ -103,6 +103,14 @@ export const AuditWorkflowModal: React.FC<AuditWorkflowModalProps> = ({
 
   const isFonction = dossier.housingRequest.housingType === 'fonction';
 
+  // المرحلة أ من المذكرة 40: تدقق المديرية الإقليمية الشروط الثلاثة قبل الإحالة.
+  const eligibilityRows = ELIGIBILITY_QUESTIONS.map((q) => ({
+    label: q.conditionLabel,
+    failLabel: q.failLabel,
+    ok: eligibilityAnswerOk(dossier.candidate, q.key),
+  }));
+  const eligibilityMet = eligibilityRows.every((r) => r.ok === true);
+
   const allDossierDocuments: { key: string; label: string; document: { present: boolean; fileName?: string; notes?: string } }[] = [
     { key: 'demandeManuscrite', label: 'الطلب الخطي', document: dossier.documents.demandeManuscrite },
     { key: 'copieCIN', label: 'نسخة بطاقة التعريف الوطنية', document: dossier.documents.copieCIN },
@@ -110,6 +118,7 @@ export const AuditWorkflowModal: React.FC<AuditWorkflowModalProps> = ({
     { key: 'situationFamiliale', label: 'الوضع العائلي', document: dossier.documents.situationFamiliale },
     { key: 'engagementHonneur', label: 'الالتزام والتصريح بالشرف (المطبوع 3)', document: dossier.documents.engagementHonneur },
     { key: 'pvInstallation', label: 'محضر الالتحاق بالمؤسسة', document: dossier.documents.pvInstallation },
+    { key: 'attestationNonPropriete', label: 'شهادة عدم امتلاك السكن (مصالح الضريبة)', document: dossier.documents.attestationNonPropriete ?? { present: false } },
     { key: 'ficheVisite', label: 'بطاقة معاينة السكن (المطبوع 5)', document: dossier.documents.ficheVisite ?? { present: false } },
     { key: 'ficheControle', label: 'بطاقة مراقبة السكن (المطبوع 9)', document: dossier.documents.ficheControle ?? { present: false } },
   ];
@@ -130,7 +139,7 @@ export const AuditWorkflowModal: React.FC<AuditWorkflowModalProps> = ({
         isComplete: true,
         dpNotes: comment || (isFonction
           ? 'تم التدقيق والتأكد من وثائق مسطرة السكن الوظيفي (الالتزام + بطاقتا المعاينة والمراقبة) لمقتضيات المذكرة 40'
-          : 'تم التدقيق والتأكد من مطابقة جميع الوثائق الست لمقتضيات المذكرة 40')
+          : 'تم التدقيق والتأكد من مطابقة جميع الوثائق المطلوبة لمقتضيات المذكرة 40')
       }
     };
     onUpdateStatus(updated, 'under_review_dp', comment || `تدقيق ومطابقة الملف من طرف ${currentUser.fullName}`);
@@ -342,6 +351,51 @@ export const AuditWorkflowModal: React.FC<AuditWorkflowModalProps> = ({
               ))}
             </div>
           </div>
+
+          {/* المرحلة أ: شروط الترشح الثلاثة + صلاحية شهادة عدم امتلاك السكن */}
+          {!isFonction && (
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-2">
+              <div className="font-bold text-slate-800 flex items-center justify-between">
+                <span>شروط الترشح (المرحلة أ من المذكرة 40):</span>
+                <span className={`font-semibold px-2 py-0.5 rounded border ${
+                  eligibilityMet
+                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                    : 'text-rose-700 bg-rose-50 border-rose-200'
+                }`}>
+                  {eligibilityMet ? 'مستوف(ة) للشروط' : 'غير مستوف(ة)'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 text-[11px] sm:grid-cols-2">
+                {eligibilityRows.map((row) => (
+                  <div key={row.label} className="flex min-w-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+                    {row.ok === true && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />}
+                    {row.ok === false && <AlertCircle className="h-3.5 w-3.5 shrink-0 text-rose-600" />}
+                    {row.ok === undefined && <Clock className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
+                    <span className="truncate text-slate-700">
+                      {row.ok === true ? row.label : row.ok === false ? row.failLabel : `${row.label} — لم يجب عنه المترشح`}
+                    </span>
+                  </div>
+                ))}
+                {(() => {
+                  const issuedAt = dossier.documents.attestationNonPropriete?.date;
+                  const expired = isNonOwnershipCertificateExpired(issuedAt);
+                  return (
+                    <div className="flex min-w-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+                      <Calendar className={`h-3.5 w-3.5 shrink-0 ${expired ? 'text-rose-600' : issuedAt ? 'text-emerald-600' : 'text-amber-500'}`} />
+                      <span className="truncate text-slate-700">
+                        {expired
+                          ? 'شهادة عدم امتلاك السكن انتهت صلاحيتها (أكثر من شهرين)'
+                          : issuedAt
+                            ? `شهادة عدم امتلاك السكن صادرة بتاريخ ${issuedAt}`
+                            : 'تاريخ شهادة عدم امتلاك السكن غير محدد'}
+                      </span>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
 
           {/* Quick Summary of Documents Verification */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-2">

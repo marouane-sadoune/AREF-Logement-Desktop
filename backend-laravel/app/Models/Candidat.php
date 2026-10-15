@@ -15,8 +15,12 @@ class Candidat extends Model
 
     protected $casts = [
         'conjoint_fonctionnaire' => 'boolean',
+        'salaire_unique' => 'boolean',
         'milieu_rural' => 'boolean',
         'franchise_rurale' => 'boolean',
+        'travaille_meme_ville' => 'boolean',
+        'possede_logement' => 'boolean',
+        'sanction_disciplinaire' => 'boolean',
     ];
 
     public function demandesLogement(): HasMany

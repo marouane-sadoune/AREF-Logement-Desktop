@@ -14,7 +14,7 @@ import {
   Printer
 } from 'lucide-react';
 import { DocumentPreviewCard, DocumentPreviewCardData } from './DocumentPreviewCard';
-import { HousingDossier, requiredDocumentKeys } from '../types/housing';
+import { HousingDossier, requiredDocumentKeys, isNonOwnershipCertificateExpired } from '../types/housing';
 import { getDossierDocumentUrl } from '../api/client';
 
 interface DocumentChecklistViewProps {
@@ -123,6 +123,15 @@ export const DocumentChecklistView: React.FC<DocumentChecklistViewProps> = ({
       legalizationNeeded: false
     },
     {
+      id: 'attestationNonPropriete',
+      titleAr: "7. شهادة عدم امتلاك السكن (مصالح الضريبة)",
+      descAr: 'شهادة إدارية من مصالح الضريبة تثبت أن المترشح لا يتوفر على سكن في ملكيته؛ لا يتجاوز عمرها شهرين (2) عند إيداع الملف.',
+      isMandatory: true,
+      data: dossier.documents.attestationNonPropriete ?? { present: false },
+      canGenerate: false,
+      legalizationNeeded: false
+    },
+    {
       id: 'ficheVisite',
       titleAr: "2. بطاقة معاينة السكن (المطبوع رقم 5)",
       descAr: 'بطاقة معاينة السكن الوظيفي تُوقَّع من طرف المستفيد والمكلف(ة) بتدبير السكنيات، وتضم ضمن الوثائق المكونة للملف.',
@@ -148,7 +157,9 @@ export const DocumentChecklistView: React.FC<DocumentChecklistViewProps> = ({
 
   const presentCount = requiredDocumentsMeta.filter(doc => doc.data.present).length;
   const totalDocs = requiredDocumentsMeta.length;
-  const isComplete = presentCount === totalDocs;
+  // شهادة عدم امتلاك السكن لا تُحتسب ضمن اللازمة إن كان عمرها أكثر من شهرين.
+  const certificateExpired = isNonOwnershipCertificateExpired(dossier.documents.attestationNonPropriete?.date);
+  const isComplete = presentCount === totalDocs && !certificateExpired;
 
   return (
     <>
@@ -180,7 +191,9 @@ export const DocumentChecklistView: React.FC<DocumentChecklistViewProps> = ({
                 ? isFonction
                   ? 'تم استيفاء وثائق مسطرة السكن الوظيفي (الالتزام + بطاقتا المعاينة والمراقبة). لا تباري ولا شبكة تنقيط: الملف يُحال للتأشير ثم الترخيص بالسكن.'
                   : 'تم استيفاء جميع الوثائق المنصوص عليها بالمذكرة الوزارية رقم 40. الملف مؤهل للإحالة على اللجنة الإقليمية بالمديرية (DP).' 
-                : `تم التحقق من ${presentCount} وثائق من أصل ${totalDocs}. يرجى توفير الوثائق الناقصة قبل إرسال الملف للأكاديمية.`}
+                : certificateExpired && presentCount === totalDocs
+                  ? 'كل الوثائق مرفقة، لكن شهادة عدم امتلاك السكن انتهت صلاحيتها (أكثر من شهرين): يجب تجديد الوثيقة قبل الإحالة على اللجنة.' 
+                  : `تم التحقق من ${presentCount} وثائق من أصل ${totalDocs}. يرجى توفير الوثائق الناقصة قبل إرسال الملف للأكاديمية.`}
             </p>
           </div>
 
@@ -201,7 +214,7 @@ export const DocumentChecklistView: React.FC<DocumentChecklistViewProps> = ({
         </div>
       </div>
 
-      {/* 6 Mandatory Documents List */}
+      {/* Mandatory Documents List (المذكرة 40) */}
       <div className="space-y-4">
         <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
           <FileCheck className="w-4 h-4 text-emerald-600" />
@@ -245,6 +258,29 @@ export const DocumentChecklistView: React.FC<DocumentChecklistViewProps> = ({
                           <span>يلزم تصحيح الإمضاء (Légalisation)</span>
                         </span>
                       )}
+
+                      {doc.id === 'attestationNonPropriete' && (() => {
+                        const issuedAt = (doc.data as any).date as string | undefined;
+                        const expired = isNonOwnershipCertificateExpired(issuedAt);
+                        return (
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                            expired
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : issuedAt
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}>
+                            <Calendar className="w-2.5 h-2.5" />
+                            <span>
+                              {expired
+                                ? 'انتهت صلاحيتها: عمرها أكثر من شهرين'
+                                : issuedAt
+                                  ? `صادرة بتاريخ ${issuedAt} (صالحة)`
+                                  : 'تاريخ الإصدار غير محدد'}
+                            </span>
+                          </span>
+                        );
+                      })()}
                     </div>
 
                     <p className="text-xs text-slate-600 leading-relaxed">

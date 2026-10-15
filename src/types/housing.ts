@@ -66,16 +66,41 @@ export interface CandidateInfo {
   performanceRating?: PerformanceRating; // المردودية (المعيار 6)
   isRuralArea?: boolean; // المؤسسة بالوسط القروي (المعيار 7)
   isRuralBranch?: boolean; // مدرس بفرعية (المعيار 7)
+  responsibility?: AdministrativeResponsibility; // المسؤولية الإدارية (المعيار 5)
+  // شروط الترشح من المرحلة أ: يزاول عمله بنفس المدينة، لا يملك سكنا، لم يُعاقب تأديبيا.
+  worksInSameCity?: boolean;
+  ownsPersonalHousing?: boolean;
+  hasDisciplinarySanction?: boolean;
 }
+
+// المعيار 5 من المذكرة 40: المسؤولية الإدارية تُسأل صراحة ولا تُشتق من عنوان المهمة.
+export type AdministrativeResponsibility = 'none' | 'chef_service' | 'chef_division';
+
+export const RESPONSIBILITY_LABELS: Record<AdministrativeResponsibility, string> = {
+  none: 'لا يتحمل مسؤولية إدارية',
+  chef_service: 'رئيس مصلحة',
+  chef_division: 'رئيس قسم',
+};
 
 export interface SituationFamilialeInfo {
   maritalStatus: MaritalStatus;
   spouseName?: string;
   spouseIsPublicOfficial: boolean;
+  // مهنة الزوج(ة): تحدد وحدها نقطتي "بدون عمل" و"الراتب الوحيد".
+  spouseOccupation?: SpouseOccupation;
+  soleFamilyIncome?: boolean;
   spouseAdministration?: string;
   spousePPR?: string;
   childrenCount: number;
 }
+
+export type SpouseOccupation = 'public_sector' | 'private_sector' | 'no_work';
+
+export const SPOUSE_OCCUPATION_LABELS: Record<SpouseOccupation, string> = {
+  public_sector: 'يمارس وظيفة عمومية',
+  private_sector: 'يمارس مهنة بالقطاع الخاص',
+  no_work: 'لا يمارس أي مهنة',
+};
 
 export interface HousingRequestInfo {
   housingType: HousingType; // وظيفي أو إداري
@@ -94,10 +119,66 @@ export interface RequiredDocumentsChecklist {
   situationFamiliale: SituationFamilialeDocs;
   engagementHonneur: RequiredDocumentStatus;
   pvInstallation: RequiredDocumentStatus;
+  // المرحلة أ: شهادة مصالح الضريبة التي تثبت عدم امتلاك سكن، لا يتجاوز عمرها شهرين.
+  attestationNonPropriete?: RequiredDocumentStatus;
   // مسطرة السكن الوظيفي (المذكرة 40): المطبوع 5 بطاقة المعاينة و المطبوع 9 بطاقة المراقبة.
   ficheVisite?: RequiredDocumentStatus;
   ficheControle?: RequiredDocumentStatus;
 }
+
+// شهادة عدم امتلاك السكن صالحة شهرين فقط من تاريخها (المرحلة أ من المذكرة 40).
+export const isNonOwnershipCertificateExpired = (date?: string): boolean => {
+  if (!date) return false;
+  const issued = new Date(date);
+  if (Number.isNaN(issued.getTime())) return false;
+  const expiry = new Date(issued);
+  expiry.setMonth(expiry.getMonth() + 2);
+  return expiry.getTime() < Date.now();
+};
+
+// شروط الترشح الثلاثة: مزاول العمل بنفس المدينة، عدم امتلاك سكن، عدم التعرض لعقوبة تأديبية.
+export const eligibilityConditions = (candidate: CandidateInfo) => ({
+  worksInSameCity: candidate.worksInSameCity === true,
+  noPersonalHousing: candidate.ownsPersonalHousing === false,
+  noDisciplinarySanction: candidate.hasDisciplinarySanction === false,
+});
+
+export const meetsEligibilityConditions = (candidate: CandidateInfo): boolean => {
+  const { worksInSameCity, noPersonalHousing, noDisciplinarySanction } = eligibilityConditions(candidate);
+  return worksInSameCity && noPersonalHousing && noDisciplinarySanction;
+};
+
+export type EligibilityKey = 'worksInSameCity' | 'ownsPersonalHousing' | 'hasDisciplinarySanction';
+
+// المرحلة أ من المذكرة 40: الأسئلة الثلاثة كما تُعرض على المترشح، والشروط
+// كما تدققها المديرية الإقليمية، والعبارة المخالفة عند عدم الاستيفاء.
+export const ELIGIBILITY_QUESTIONS: { key: EligibilityKey; label: string; conditionLabel: string; failLabel: string }[] = [
+  {
+    key: 'worksInSameCity',
+    label: 'يزاول(ت) العمل بنفس المدينة أو الجماعة التي يوجد بها السكن المطلوب',
+    conditionLabel: 'مزاولة العمل بنفس المدينة أو الجماعة التي يوجد بها السكن',
+    failLabel: 'لا يزاول(ت) بنفس المدينة',
+  },
+  {
+    key: 'ownsPersonalHousing',
+    label: 'يملك(ت) المعني(ة) أو زوجه(ا) سكنا شخصيا بنفس المدينة',
+    conditionLabel: 'عدم التوفر على سكن في الملكية الشخصية بنفس المدينة',
+    failLabel: 'يملك(ت) سكنا شخصيا',
+  },
+  {
+    key: 'hasDisciplinarySanction',
+    label: 'تعرض(ت) المعني(ة) لعقوبة تأديبية خلال السنة الجارية',
+    conditionLabel: 'عدم التعرض لعقوبة تأديبية خلال السنة الجارية',
+    failLabel: 'تعرض(ت) لعقوبة تأديبية',
+  },
+];
+
+// الجواب المطابق للشروط هو "نعم" للأول و"لا" للآخرين؛ null/undefined = لم يُجب.
+export const eligibilityAnswerOk = (candidate: CandidateInfo, key: EligibilityKey): boolean | undefined => {
+  const value = candidate[key];
+  if (value === undefined) return undefined;
+  return key === 'worksInSameCity' ? value === true : value === false;
+};
 
 // الوثائق الإلزامية حسب نوع السكن: الوظيفي بلا تباري ولا تنقيط، الإداري بملف كامل.
 export const DOCUMENTS_BY_HOUSING_TYPE: Record<'fonction' | 'administratif', (keyof RequiredDocumentsChecklist)[]> = {
@@ -109,6 +190,7 @@ export const DOCUMENTS_BY_HOUSING_TYPE: Record<'fonction' | 'administratif', (ke
     'situationFamiliale',
     'engagementHonneur',
     'pvInstallation',
+    'attestationNonPropriete',
   ],
 };
 
@@ -129,6 +211,7 @@ export interface BaremePoints {
   seniorityEtablissementPts: number;
   scalePts: number;
   maritalPts: number;
+  soleIncomePts: number;
   childrenPts: number;
   responsibilityBonus: number;
   performancePts?: number;   // المردودية (المعيار 6)

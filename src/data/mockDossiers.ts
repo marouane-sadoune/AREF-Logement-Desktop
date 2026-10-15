@@ -91,6 +91,7 @@ export const INITIAL_DOSSIERS: HousingDossier[] = [
       seniorityEtablissementPts: 6,
       scalePts: 10,
       maritalPts: 4,
+      soleIncomePts: 0,
       childrenPts: 6,
       responsibilityBonus: 25,
       totalPts: 69
@@ -209,6 +210,7 @@ export const INITIAL_DOSSIERS: HousingDossier[] = [
       seniorityEtablissementPts: 10,
       scalePts: 10,
       maritalPts: 4,
+      soleIncomePts: 0,
       childrenPts: 4,
       responsibilityBonus: 25,
       totalPts: 75
@@ -303,6 +305,7 @@ export const INITIAL_DOSSIERS: HousingDossier[] = [
       seniorityEtablissementPts: 8,
       scalePts: 10,
       maritalPts: 4,
+      soleIncomePts: 0,
       childrenPts: 4,
       responsibilityBonus: 25,
       totalPts: 66
@@ -402,6 +405,7 @@ export const INITIAL_DOSSIERS: HousingDossier[] = [
       seniorityEtablissementPts: 6,
       scalePts: 10,
       maritalPts: 4,
+      soleIncomePts: 0,
       childrenPts: 2,
       responsibilityBonus: 25,
       totalPts: 59
@@ -475,6 +479,7 @@ export const INITIAL_DOSSIERS: HousingDossier[] = [
       seniorityEtablissementPts: 16,
       scalePts: 10,
       maritalPts: 4,
+      soleIncomePts: 0,
       childrenPts: 6,
       responsibilityBonus: 0,
       totalPts: 52
@@ -559,6 +564,7 @@ export const INITIAL_DOSSIERS: HousingDossier[] = [
       seniorityEtablissementPts: 4,
       scalePts: 10,
       maritalPts: 4,
+      soleIncomePts: 0,
       childrenPts: 4,
       responsibilityBonus: 25,
       totalPts: 61
@@ -644,6 +650,7 @@ export const INITIAL_DOSSIERS: HousingDossier[] = [
       seniorityEtablissementPts: 6,
       scalePts: 10,
       maritalPts: 4,
+      soleIncomePts: 0,
       childrenPts: 2,
       responsibilityBonus: 25,
       totalPts: 58
@@ -723,6 +730,7 @@ export const INITIAL_DOSSIERS: HousingDossier[] = [
       seniorityEtablissementPts: 10,
       scalePts: 10,
       maritalPts: 4,
+      soleIncomePts: 0,
       childrenPts: 6,
       responsibilityBonus: 25,
       totalPts: 74

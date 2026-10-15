@@ -20,6 +20,8 @@ class DocumentFourni extends Model
         'situation_familiale' => 'boolean',
         'engagement_honneur' => 'boolean',
         'pv_installation' => 'boolean',
+        'attestation_non_propriete' => 'boolean',
+        'date_attestation_non_propriete' => 'date',
         'fiche_visite' => 'boolean',
         'fiche_controle' => 'boolean',
         'date_verification_dp' => 'date',

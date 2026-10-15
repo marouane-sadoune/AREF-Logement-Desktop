@@ -1,5 +1,6 @@
 import React from 'react';
 import { HousingDossier } from '../types/housing';
+import { compareBareme, isTiedWith } from '../utils/bareme';
 
 interface OfficialFormSheetProps {
   dossier: HousingDossier;
@@ -116,7 +117,10 @@ export const OfficialFormSheet: React.FC<OfficialFormSheetProps> = ({ dossier, d
 
   /* ============ المطبوع 2: محضر أشغال لجنة الإسناد ============ */
   if (formId === 'official_2') {
-    const competitors = dossiers.filter((d) => d.housingRequest.targetEtablissement === h.targetEtablissement && d.housingRequest.housingType !== 'fonction');
+    const competitors = dossiers
+      .filter((d) => d.housingRequest.targetEtablissement === h.targetEtablissement && d.housingRequest.housingType !== 'fonction')
+      // الترتيب من الأعلى نقطاً ثم الأقدمية، والتساوي التام يُفصل فيه بالقرعة.
+      .sort(compareBareme);
     return (
       <div className="space-y-5 text-xs font-sans leading-relaxed">
         <div className="text-center space-y-1">
@@ -149,7 +153,11 @@ export const OfficialFormSheet: React.FC<OfficialFormSheetProps> = ({ dossier, d
             </tr>
           </thead>
           <tbody>
-            {competitors.map((d, i) => (
+            {competitors.map((d, i) => {
+              const tied =
+                (i > 0 && isTiedWith(competitors[i - 1], d)) ||
+                (i < competitors.length - 1 && isTiedWith(d, competitors[i + 1]));
+              return (
               <tr key={d.id} className={d.id === dossier.id ? 'bg-emerald-50 font-bold' : ''}>
                 <td className={cell}>{d.referenceNumber}</td>
                 <td className={cell}>{d.candidate.fullNameAr}</td>
@@ -158,9 +166,10 @@ export const OfficialFormSheet: React.FC<OfficialFormSheetProps> = ({ dossier, d
                 <td className={cell}>{d.candidate.seniorityGeneral}</td>
                 <td className={cell}>{d.situationFamiliale.childrenCount} أطفال</td>
                 <td className={cell}>{d.bareme.totalPts}</td>
-                <td className={cell}>{i + 1}</td>
+                <td className={cell}>{i + 1}{tied ? ' (قرعة)' : ''}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
 

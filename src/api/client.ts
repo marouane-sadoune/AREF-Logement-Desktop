@@ -58,7 +58,7 @@ const HOUSING_STATUS_FROM_API: Record<string, string> = {
   en_maintenance: 'under_maintenance',
 };
 
-// Maps each of the 6 mandatory Dossier de Demande documents (step 4 of the
+// Maps each of the mandatory Dossier de Demande documents (step 4 of the
 // dossier form) to the column prefix used by the backend documents_fournis
 // table (shared by the key boolean flag and the key_path file path column).
 export const SUPPORTING_DOC_KEYS: Record<string, string> = {
@@ -71,6 +71,7 @@ export const SUPPORTING_DOC_KEYS: Record<string, string> = {
   situationFamilialeEnfants: 'situation_familiale_enfants',
   engagementHonneur: 'engagement_honneur',
   pvInstallation: 'pv_installation',
+  attestationNonPropriete: 'attestation_non_propriete',
   ficheVisite: 'fiche_visite',
   ficheControle: 'fiche_controle',
 };
@@ -141,11 +142,23 @@ export function mapApiToDossier(api: any): HousingDossier {
       performanceRating: (c.merdoudia || undefined) as any,
       isRuralArea: !!c.milieu_rural,
       isRuralBranch: !!c.franchise_rurale,
+      responsibility: (c.responsabilite || 'none') as any,
+      // null = لم يُجب بعد (ملفات قديمة أو مسطرة وظيفي): يبقى الحقل غير محدد.
+      worksInSameCity: c.travaille_meme_ville === null || c.travaille_meme_ville === undefined
+        ? undefined : !!c.travaille_meme_ville,
+      ownsPersonalHousing: c.possede_logement === null || c.possede_logement === undefined
+        ? undefined : !!c.possede_logement,
+      hasDisciplinarySanction: c.sanction_disciplinaire === null || c.sanction_disciplinaire === undefined
+        ? undefined : !!c.sanction_disciplinaire,
     },
     situationFamiliale: {
       maritalStatus: c.situation_familiale || 'celibataire',
       spouseName: c.nom_conjoint || '',
       spouseIsPublicOfficial: !!c.conjoint_fonctionnaire,
+      spouseOccupation: (c.situation_familiale === 'marie'
+        ? (c.conjoint_situation || (c.conjoint_fonctionnaire ? 'public_sector' : 'no_work'))
+        : undefined) as any,
+      soleFamilyIncome: !!c.salaire_unique,
       spouseAdministration: c.administration_conjoint || '',
       spousePPR: c.ppr_conjoint || '',
       childrenCount: c.nombre_enfants ?? 0,
@@ -178,6 +191,11 @@ export function mapApiToDossier(api: any): HousingDossier {
       },
       engagementHonneur: { present: !!docs.engagement_honneur, fileName: fileNameFromPath(docs.engagement_honneur_path) },
       pvInstallation: { present: !!docs.pv_installation, fileName: fileNameFromPath(docs.pv_installation_path) },
+      attestationNonPropriete: {
+        present: !!docs.attestation_non_propriete,
+        fileName: fileNameFromPath(docs.attestation_non_propriete_path),
+        date: docs.date_attestation_non_propriete ? String(docs.date_attestation_non_propriete).slice(0, 10) : undefined,
+      },
       ficheVisite: { present: !!docs.fiche_visite, fileName: fileNameFromPath(docs.fiche_visite_path) },
       ficheControle: { present: !!docs.fiche_controle, fileName: fileNameFromPath(docs.fiche_controle_path) },
     },
@@ -186,6 +204,7 @@ export function mapApiToDossier(api: any): HousingDossier {
       seniorityEtablissementPts: b.pts_anciennete_etablissement ?? 0,
       scalePts: b.pts_echelle ?? 0,
       maritalPts: b.pts_situation_familiale ?? 0,
+      soleIncomePts: b.pts_salaire_unique ?? 0,
       childrenPts: b.pts_enfants ?? 0,
       responsibilityBonus: b.bonus_responsabilite ?? 0,
       performancePts: b.pts_merdoudia ?? 0,
@@ -250,6 +269,13 @@ function buildCreatePayload(dossier: HousingDossier) {
       merdoudia: c.performanceRating ?? null,
       milieu_rural: !!c.isRuralArea,
       franchise_rurale: !!c.isRuralBranch,
+      responsabilite: h.housingType === 'fonction' ? 'none' : (c.responsibility ?? 'none'),
+      conjoint_situation: h.housingType === 'fonction' ? null : (f.spouseOccupation ?? null),
+      salaire_unique: h.housingType === 'fonction' ? false : !!f.soleFamilyIncome,
+      // المرحلة أ من المذكرة 40: شروط الترشح الثلاثة (لا تُسال في مسطرة السكن الوظيفي).
+      travaille_meme_ville: h.housingType === 'fonction' ? null : (c.worksInSameCity ?? null),
+      possede_logement: h.housingType === 'fonction' ? null : (c.ownsPersonalHousing ?? null),
+      sanction_disciplinaire: h.housingType === 'fonction' ? null : (c.hasDisciplinarySanction ?? null),
     },
     type_logement: h.housingType,
     etablissement_cible: h.targetEtablissement,
@@ -261,14 +287,7 @@ function buildCreatePayload(dossier: HousingDossier) {
     statut_dossier: dossier.status,
     date_creation: dossier.creationDate,
     reasons: h.reasons,
-    pts_anciennete_generale: bareme.seniorityGeneralPts,
-    pts_anciennete_etablissement: bareme.seniorityEtablissementPts,
-    pts_echelle: bareme.scalePts,
-    pts_situation_familiale: bareme.maritalPts,
-    pts_enfants: bareme.childrenPts,
-    bonus_responsabilite: bareme.responsibilityBonus,
-    pts_merdoudia: bareme.performancePts ?? 0,
-    pts_milieu_rural: bareme.ruralBonusPts ?? 0,
+    // نقط شبكة التنقيط لا تُرسل: يحتسبها الخادم من معطيات المترشح (المذكرة 40).
     documents: {
       demande_manuscrite: docs.demandeManuscrite.present,
       copie_cin: docs.copieCIN.present,
@@ -276,6 +295,8 @@ function buildCreatePayload(dossier: HousingDossier) {
       situation_familiale: docs.situationFamiliale.present,
       engagement_honneur: docs.engagementHonneur.present,
       pv_installation: docs.pvInstallation.present,
+      attestation_non_propriete: docs.attestationNonPropriete?.present ?? false,
+      date_attestation_non_propriete: docs.attestationNonPropriete?.date || null,
       fiche_visite: docs.ficheVisite?.present ?? false,
       fiche_controle: docs.ficheControle?.present ?? false,
     },

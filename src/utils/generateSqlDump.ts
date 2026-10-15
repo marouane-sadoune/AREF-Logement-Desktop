@@ -154,7 +154,7 @@ CREATE TABLE \`demandes_logement\` (
 
 --
 -- Structure de la table \`documents_fournis\`
--- (Les 6 pièces exigées par la Note 40)
+-- (الوثائق الإلزامية التي تشترطها المذكرة 40 لملف السكن الإداري)
 --
 DROP TABLE IF EXISTS \`documents_fournis\`;
 CREATE TABLE \`documents_fournis\` (
@@ -166,6 +166,8 @@ CREATE TABLE \`documents_fournis\` (
   \`situation_familiale\` tinyint(1) NOT NULL DEFAULT 1 COMMENT '4. وثائق الوضع العائلي والأطفال',
   \`engagement_honneur\` tinyint(1) NOT NULL DEFAULT 1 COMMENT '5. مطبوع الالتزام مصحح الإمضاء',
   \`pv_installation\` tinyint(1) NOT NULL DEFAULT 1 COMMENT '6. محضر الالتحاق الفعلي بالمؤسسة',
+  \`attestation_non_propriete\` tinyint(1) NOT NULL DEFAULT 0 COMMENT '7. شهادة عدم امتلاك السكن (صالحة شهرين)',
+  \`date_attestation_non_propriete\` date DEFAULT NULL COMMENT 'تاريخ إصدار شهادة عدم امتلاك السكن',
   \`date_verification_dp\` date DEFAULT NULL,
   \`audite_par\` varchar(100) DEFAULT NULL,
   \`remarques_audit\` text DEFAULT NULL,
@@ -186,8 +188,11 @@ CREATE TABLE \`baremes_detail\` (
   \`pts_anciennete_etablissement\` int(11) NOT NULL DEFAULT 0,
   \`pts_echelle\` int(11) NOT NULL DEFAULT 0,
   \`pts_situation_familiale\` int(11) NOT NULL DEFAULT 0,
+  \`pts_salaire_unique\` int(11) NOT NULL DEFAULT 0 COMMENT '2 نقطة عن الراتب الوحيد للأسرة',
   \`pts_enfants\` int(11) NOT NULL DEFAULT 0,
   \`bonus_responsabilite\` int(11) NOT NULL DEFAULT 0 COMMENT 'امتياز الوظيفة الملزمة بحكم المذكرة 40',
+  \`pts_merdoudia\` int(11) NOT NULL DEFAULT 0,
+  \`pts_milieu_rural\` int(11) NOT NULL DEFAULT 0,
   \`total_points\` int(11) NOT NULL DEFAULT 0,
   PRIMARY KEY (\`id\`),
   UNIQUE KEY \`dossier_bareme_unique\` (\`numero_dossier\`)
@@ -236,11 +241,11 @@ INSERT INTO \`demandes_logement\` (\`numero_dossier\`, \`candidat_ppr\`, \`type_
 VALUES ('${escapeStr(d.referenceNumber)}', '${escapeStr(c.ppr)}', '${h.housingType}', '${escapeStr(h.targetEtablissement)}', '${escapeStr(h.housingCategory)}', '${escapeStr(h.housingAddress)}', '${escapeStr(h.housingNumber)}', '${h.housingStatus}', '${d.status}', '${d.creationDate}', ${b.totalPts}, ${d.dpAudit?.bordereauNumber ? `'${escapeStr(d.dpAudit.bordereauNumber)}'` : 'NULL'}, ${d.dpAudit?.transmissionDate ? `'${d.dpAudit.transmissionDate}'` : 'NULL'}, ${d.arefDecision?.decisionNumber ? `'${escapeStr(d.arefDecision.decisionNumber)}'` : 'NULL'}, ${d.arefDecision?.commissionDate ? `'${d.arefDecision.commissionDate}'` : 'NULL'}, '${escapeStr(h.reasons)}')
 ON DUPLICATE KEY UPDATE \`total_bareme\`=${b.totalPts}, \`statut_dossier\`='${d.status}';
 
-INSERT INTO \`documents_fournis\` (\`numero_dossier\`, \`demande_manuscrite\`, \`copie_cin\`, \`attestation_travail\`, \`situation_familiale\`, \`engagement_honneur\`, \`pv_installation\`, \`date_verification_dp\`, \`audite_par\`, \`remarques_audit\`)
-VALUES ('${escapeStr(d.referenceNumber)}', ${docs.demandeManuscrite.present ? 1 : 0}, ${docs.copieCIN.present ? 1 : 0}, ${docs.attestationTravail.present ? 1 : 0}, ${docs.situationFamiliale.present ? 1 : 0}, ${docs.engagementHonneur.present ? 1 : 0}, ${docs.pvInstallation.present ? 1 : 0}, ${d.dpAudit?.auditDate ? `'${d.dpAudit.auditDate}'` : 'NULL'}, '${escapeStr(d.dpAudit?.auditedBy)}', '${escapeStr(d.dpAudit?.dpNotes)}');
+INSERT INTO \`documents_fournis\` (\`numero_dossier\`, \`demande_manuscrite\`, \`copie_cin\`, \`attestation_travail\`, \`situation_familiale\`, \`engagement_honneur\`, \`pv_installation\`, \`attestation_non_propriete\`, \`date_attestation_non_propriete\`, \`date_verification_dp\`, \`audite_par\`, \`remarques_audit\`)
+VALUES ('${escapeStr(d.referenceNumber)}', ${docs.demandeManuscrite.present ? 1 : 0}, ${docs.copieCIN.present ? 1 : 0}, ${docs.attestationTravail.present ? 1 : 0}, ${docs.situationFamiliale.present ? 1 : 0}, ${docs.engagementHonneur.present ? 1 : 0}, ${docs.pvInstallation.present ? 1 : 0}, ${docs.attestationNonPropriete?.present ? 1 : 0}, ${docs.attestationNonPropriete?.date ? `'${docs.attestationNonPropriete.date}'` : 'NULL'}, ${d.dpAudit?.auditDate ? `'${d.dpAudit.auditDate}'` : 'NULL'}, '${escapeStr(d.dpAudit?.auditedBy)}', '${escapeStr(d.dpAudit?.dpNotes)}');
 
-INSERT INTO \`baremes_detail\` (\`numero_dossier\`, \`pts_anciennete_generale\`, \`pts_anciennete_etablissement\`, \`pts_echelle\`, \`pts_situation_familiale\`, \`pts_enfants\`, \`bonus_responsabilite\`, \`pts_merdoudia\`, \`pts_milieu_rural\`, \`total_points\`)
-VALUES ('${escapeStr(d.referenceNumber)}', ${b.seniorityGeneralPts}, ${b.seniorityEtablissementPts}, ${b.scalePts}, ${b.maritalPts}, ${b.childrenPts}, ${b.responsibilityBonus}, ${b.performancePts ?? 0}, ${b.ruralBonusPts ?? 0}, ${b.totalPts})
+INSERT INTO \`baremes_detail\` (\`numero_dossier\`, \`pts_anciennete_generale\`, \`pts_anciennete_etablissement\`, \`pts_echelle\`, \`pts_situation_familiale\`, \`pts_salaire_unique\`, \`pts_enfants\`, \`bonus_responsabilite\`, \`pts_merdoudia\`, \`pts_milieu_rural\`, \`total_points\`)
+VALUES ('${escapeStr(d.referenceNumber)}', ${b.seniorityGeneralPts}, ${b.seniorityEtablissementPts}, ${b.scalePts}, ${b.maritalPts}, ${b.soleIncomePts}, ${b.childrenPts}, ${b.responsibilityBonus}, ${b.performancePts ?? 0}, ${b.ruralBonusPts ?? 0}, ${b.totalPts})
 ON DUPLICATE KEY UPDATE \`total_points\`=${b.totalPts};
 `;
 

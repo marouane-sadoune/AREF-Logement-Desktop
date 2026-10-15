@@ -8,6 +8,7 @@ use App\Models\BaremeDetail;
 use App\Models\Candidat;
 use App\Models\DemandeLogement;
 use App\Models\DocumentFourni;
+use App\Services\Note40ScoreCalculator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Http\JsonResponse;
@@ -64,6 +65,13 @@ class AssignmentController extends Controller
             'candidat.merdoudia' => 'nullable|in:excellent,good,satisfactory,below',
             'candidat.milieu_rural' => 'sometimes|boolean',
             'candidat.franchise_rurale' => 'sometimes|boolean',
+            'candidat.responsabilite' => 'nullable|in:none,chef_service,chef_division',
+            'candidat.conjoint_situation' => 'nullable|in:public_sector,private_sector,no_work',
+            'candidat.salaire_unique' => 'sometimes|boolean',
+            // المرحلة أ: شروط الترشح الثلاثة، تجيب عنها الواجهة صراحة.
+            'candidat.travaille_meme_ville' => 'nullable|boolean',
+            'candidat.possede_logement' => 'nullable|boolean',
+            'candidat.sanction_disciplinaire' => 'nullable|boolean',
 
             'type_logement' => 'required|in:fonction,administratif',
             'etablissement_cible' => 'required|string|max:150',
@@ -78,38 +86,22 @@ class AssignmentController extends Controller
             'acteur' => 'nullable|string|max:100',
             'commentaire' => 'nullable|string',
 
-            'pts_anciennete_generale' => 'sometimes|integer|min:0',
-            'pts_anciennete_etablissement' => 'sometimes|integer|min:0',
-            'pts_echelle' => 'sometimes|integer|min:0',
-            'pts_situation_familiale' => 'sometimes|integer|min:0',
-            'pts_enfants' => 'sometimes|integer|min:0',
-            'bonus_responsabilite' => 'sometimes|integer|min:0',
-            'pts_merdoudia' => 'sometimes|integer|min:0',
-            'pts_milieu_rural' => 'sometimes|integer|min:0',
-
             'documents.demande_manuscrite' => 'sometimes|boolean',
             'documents.copie_cin' => 'sometimes|boolean',
             'documents.attestation_travail' => 'sometimes|boolean',
             'documents.situation_familiale' => 'sometimes|boolean',
             'documents.engagement_honneur' => 'sometimes|boolean',
             'documents.pv_installation' => 'sometimes|boolean',
+            'documents.attestation_non_propriete' => 'sometimes|boolean',
+            'documents.date_attestation_non_propriete' => 'nullable|date',
             'documents.fiche_visite' => 'sometimes|boolean',
             'documents.fiche_controle' => 'sometimes|boolean',
         ]);
 
-        $scoreFields = [
-            'pts_anciennete_generale',
-            'pts_anciennete_etablissement',
-            'pts_echelle',
-            'pts_situation_familiale',
-            'pts_enfants',
-            'bonus_responsabilite',
-            'pts_merdoudia',
-            'pts_milieu_rural',
-        ];
-        $scores = collect($scoreFields)->mapWithKeys(fn(string $field) => [
-            $field => $validated[$field] ?? 0,
-        ])->all();
+        // النقط تُحتسب هنا من معطيات المترشح: الواجهة لا تمرّر قيوداً جاهزة.
+        $scores = $validated['type_logement'] === 'fonction'
+            ? Note40ScoreCalculator::zeroed()
+            : Note40ScoreCalculator::score($validated['candidat']);
         $documentFlags = collect($validated['documents'] ?? [])->all();
         $numeroDossier = 'DOS-' . now()->format('Y') . '-' . Str::upper(Str::random(8));
 

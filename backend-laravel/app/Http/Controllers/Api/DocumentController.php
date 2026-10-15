@@ -29,6 +29,7 @@ class DocumentController extends Controller
         'situation_familiale_enfants',
         'engagement_honneur',
         'pv_installation',
+        'attestation_non_propriete',
         'fiche_visite',
         'fiche_controle',
     ];

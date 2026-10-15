@@ -13,8 +13,8 @@ import {
   PencilLine,
   RotateCcw
 } from 'lucide-react';
-import { HousingDossier } from '../types/housing';
-import { PERFORMANCE_RATING_LABELS } from '../types/housing';
+import { HousingDossier, requiredDocumentKeys } from '../types/housing';
+import { PERFORMANCE_RATING_LABELS, RESPONSIBILITY_LABELS, SPOUSE_OCCUPATION_LABELS } from '../types/housing';
 import { ArefOfficialHeader } from './ArefOfficialHeader';
 import { OfficialFormSheet } from './OfficialFormSheets';
 import { useAuth } from '../context/AuthContext';
@@ -590,13 +590,13 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
                   </tr>
                   <tr>
                     <td className="border border-slate-300 p-2 text-right font-medium">2. الأقدمية العامة</td>
-                    <td className="border border-slate-300 p-2 text-[11px]">5 أشطر: 1-5 (1) · 6-10 (2) · 11-15 (3) · 16-20 (4) · +20 (5)</td>
+                    <td className="border border-slate-300 p-2 text-[11px]">6 أشطر: 1-4 (1) · 5-9 (2) · 10-14 (3) · 15-19 (4) · 20-24 (5) · 25 فأكثر (6)</td>
                     <td className="border border-slate-300 p-2 font-mono">{candidate.seniorityGeneral} سنة</td>
                     <td className="border border-slate-300 p-2 font-bold font-mono">{bareme.seniorityGeneralPts}</td>
                   </tr>
                   <tr>
                     <td className="border border-slate-300 p-2 text-right font-medium">3. الأقدمية بنفس المدينة</td>
-                    <td className="border border-slate-300 p-2 text-[11px]">من 2 إلى 5 سنوات (1) / 6 سنوات فأكثر (2)</td>
+                    <td className="border border-slate-300 p-2 text-[11px]">من سنة إلى 5 (1) / 6 سنوات فأكثر (2)</td>
                     <td className="border border-slate-300 p-2 font-mono">{candidate.seniorityEtablissement} سنوات</td>
                     <td className="border border-slate-300 p-2 font-bold font-mono">{bareme.seniorityEtablissementPts}</td>
                   </tr>
@@ -607,20 +607,28 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
                     <td className="border border-slate-300 p-2 font-bold font-mono">{bareme.childrenPts}</td>
                   </tr>
                   <tr>
-                    <td className="border border-slate-300 p-2 text-right font-medium">4. التحملات العائلية - الزوج(ة) غير العامل(ة)</td>
-                    <td className="border border-slate-300 p-2 text-[11px]">نقطتان عن الزوج(ة) غير العامل(ة)</td>
-                    <td className="border border-slate-300 p-2">{family.maritalStatus === 'marie' ? (family.spouseIsPublicOfficial ? 'زوج(ة) عامل(ة)' : 'زوج(ة) غير عامل(ة)') : family.maritalStatus}</td>
+                    <td className="border border-slate-300 p-2 text-right font-medium">4. التحملات العائلية - الزوج(ة)</td>
+                    <td className="border border-slate-300 p-2 text-[11px]">3 نقط عن الزوج(ة) الذي(ة) لا يمارس(ت) أي مهنة</td>
+                    <td className="border border-slate-300 p-2">{family.maritalStatus === 'marie'
+                      ? SPOUSE_OCCUPATION_LABELS[family.spouseOccupation ?? 'no_work']
+                      : family.maritalStatus}</td>
                     <td className="border border-slate-300 p-2 font-bold font-mono">{bareme.maritalPts}</td>
                   </tr>
                   <tr>
+                    <td className="border border-slate-300 p-2 text-right font-medium">4. التحملات العائلية - الراتب الوحيد</td>
+                    <td className="border border-slate-300 p-2 text-[11px]">نقطتان عن الأسرة التي لا تعتمد إلا على راتب وحيد</td>
+                    <td className="border border-slate-300 p-2">{family.soleFamilyIncome ? 'راتب وحيد' : '—'}</td>
+                    <td className="border border-slate-300 p-2 font-bold font-mono">{bareme.soleIncomePts}</td>
+                  </tr>
+                  <tr>
                     <td className="border border-slate-300 p-2 text-right font-medium">5. المسؤولية الإدارية</td>
-                    <td className="border border-slate-300 p-2 text-[11px]">رئيس قسم / مؤسسة (3) · رئيس مصلحة (2)</td>
-                    <td className="border border-slate-300 p-2">{candidate.grade}</td>
+                    <td className="border border-slate-300 p-2 text-[11px]">رئيس قسم (3) · رئيس مصلحة (2)</td>
+                    <td className="border border-slate-300 p-2">{RESPONSIBILITY_LABELS[candidate.responsibility ?? 'none']}</td>
                     <td className="border border-slate-300 p-2 font-bold font-mono">{bareme.responsibilityBonus}</td>
                   </tr>
                   <tr>
                     <td className="border border-slate-300 p-2 text-right font-medium">6. المردودية</td>
-                    <td className="border border-slate-300 p-2 text-[11px]">جيد جدا (3) · جيد (2) · مستحسن (1) · دون المستحسن (0)</td>
+                    <td className="border border-slate-300 p-2 text-[11px]">جيد جدا (4) · جيد (2) · مستحسن (1) · دون المستحسن (0)</td>
                     <td className="border border-slate-300 p-2">{PERFORMANCE_RATING_LABELS[candidate.performanceRating ?? 'satisfactory']}</td>
                     <td className="border border-slate-300 p-2 font-bold font-mono">{bareme.performancePts ?? 0}</td>
                   </tr>
@@ -640,14 +648,27 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
 
             {/* Checklist of attachments */}
             <div className="border border-slate-200 p-3 rounded space-y-1">
-              <div className="font-bold text-slate-800">4. شهادة استيفاء الوثائق الـ 6 الإلزامية:</div>
+              <div className="font-bold text-slate-800">4. شهادة استيفاء الوثائق الإلزامية للملف:</div>
               <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <div>[ {activeDossier.documents.demandeManuscrite.present ? '✓' : ' '} ] 1. الطلب الخطي موجه للمدير الإقليمي</div>
-                <div>[ {activeDossier.documents.copieCIN.present ? '✓' : ' '} ] 2. نسخة مصادق عليها من بطاقة التعريف (CIN)</div>
-                <div>[ {activeDossier.documents.attestationTravail.present ? '✓' : ' '} ] 3. شهادة العمل حديثة</div>
-                <div>[ {activeDossier.documents.situationFamiliale.present ? '✓' : ' '} ] 4. وثائق الوضع العائلي والأطفال</div>
-                <div>[ {activeDossier.documents.engagementHonneur.present ? '✓' : ' '} ] 5. مطبوع الالتزام مصحح الإمضاء (Note 40)</div>
-                <div>[ {activeDossier.documents.pvInstallation.present ? '✓' : ' '} ] 6. محضر الالتحاق بالمؤسسة (PV)</div>
+                {(() => {
+                  const d = activeDossier.documents;
+                  const rows = [
+                    { key: 'demandeManuscrite', label: 'الطلب الخطي موجه للمدير الإقليمي', present: d.demandeManuscrite.present },
+                    { key: 'copieCIN', label: 'نسخة مصادق عليها من بطاقة التعريف (CIN)', present: d.copieCIN.present },
+                    { key: 'attestationTravail', label: 'شهادة العمل حديثة', present: d.attestationTravail.present },
+                    { key: 'situationFamiliale', label: 'وثائق الوضع العائلي والأطفال', present: d.situationFamiliale.present },
+                    { key: 'engagementHonneur', label: 'مطبوع الالتزام مصحح الإمضاء (Note 40)', present: d.engagementHonneur.present },
+                    { key: 'pvInstallation', label: 'محضر الالتحاق بالمؤسسة (PV)', present: d.pvInstallation.present },
+                    { key: 'attestationNonPropriete', label: 'شهادة عدم امتلاك السكن (مصالح الضريبة)', present: !!d.attestationNonPropriete?.present },
+                  ];
+                  const required = requiredDocumentKeys(
+                    activeDossier.housingRequest.housingType,
+                    activeDossier.situationFamiliale.maritalStatus
+                  ) as string[];
+                  return rows.filter((r) => required.includes(r.key)).map((r, i) => (
+                    <div key={r.key}>[ {r.present ? '✓' : ' '} ] {i + 1}. {r.label}</div>
+                  ));
+                })()}
               </div>
             </div>
 

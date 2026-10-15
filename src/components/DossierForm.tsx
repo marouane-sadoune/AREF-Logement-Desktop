@@ -9,6 +9,7 @@ import {
   Calculator, 
   CheckCircle, 
   AlertCircle,
+  AlertTriangle,
   Building,
   Calendar,
   Sparkles,
@@ -21,11 +22,18 @@ import {
   HousingRequestInfo,
   RequiredDocumentsChecklist,
   requiredDocumentKeys,
+  meetsEligibilityConditions,
+  isNonOwnershipCertificateExpired,
+  ELIGIBILITY_QUESTIONS,
   MOROCCAN_AREFS,
   MOROCCAN_DIRECTORATES,
   MOROCCAN_GRADES,
   PERFORMANCE_RATING_LABELS,
   PerformanceRating,
+  SPOUSE_OCCUPATION_LABELS,
+  SpouseOccupation,
+  RESPONSIBILITY_LABELS,
+  AdministrativeResponsibility,
   RegistreLogement
 } from '../types/housing';
 import { calculateBareme } from '../utils/bareme';
@@ -55,6 +63,7 @@ const DOC_LABELS_AR: Record<string, string> = {
   situationFamilialeEnfants: '4-ج. بيان عدد الأطفال المعالين',
   engagementHonneur: '5. مطبوع الالتزام والتصريح بالشرف (Engagement)',
   pvInstallation: '6. محضر الالتحاق بالمؤسسة (PV d\'installation)',
+  attestationNonPropriete: '7. شهادة عدم امتلاك السكن (مصلحة الضريبة)',
   ficheVisite: 'بطاقة معاينة السكن (المطبوع 5)',
   ficheControle: 'بطاقة مراقبة السكن (المطبوع 9)',
 };
@@ -89,21 +98,39 @@ export const DossierForm: React.FC<DossierFormProps> = ({
       etablissementType: 'ثانوي تأهيلي',
       commune: isDpAgent && currentUser.dpNameAr ? currentUser.dpNameAr.replace('المديرية الإقليمية ب', '').replace(' (بوعرفة)', '').trim() : 'وجدة',
       directionProvinciale: (isDpAgent && currentUser.dpNameAr) ? currentUser.dpNameAr : MOROCCAN_DIRECTORATES[0],
-      aref: MOROCCAN_AREFS[0] // الأكاديمية الجهوية للتربية والتكوين - جهة الشرق
+      aref: MOROCCAN_AREFS[0], // الأكاديمية الجهوية للتربية والتكوين - جهة الشرق
+      responsibility: 'none'
     }
   );
 
   // Situation Familiale State
-  const [situationFamiliale, setSituationFamiliale] = useState<SituationFamilialeInfo>(
-    initialDossier?.situationFamiliale || {
+  const [situationFamiliale, setSituationFamiliale] = useState<SituationFamilialeInfo>(() => {
+    const stored = initialDossier?.situationFamiliale;
+    if (stored) {
+      // الملفات المحفوظة سابقا لا تعرف إلا "موظف(ة) أم لا": تُحوَّل مرة واحدة إلى مهنة صريحة.
+      return {
+        ...stored,
+        spouseOccupation:
+          stored.spouseOccupation ??
+          (stored.maritalStatus === 'marie'
+            ? stored.spouseIsPublicOfficial
+              ? 'public_sector'
+              : 'no_work'
+            : undefined),
+        soleFamilyIncome: stored.soleFamilyIncome ?? false,
+      };
+    }
+    return {
       maritalStatus: 'marie',
       spouseName: '',
       spouseIsPublicOfficial: false,
+      spouseOccupation: 'no_work',
+      soleFamilyIncome: false,
       spouseAdministration: '',
       spousePPR: '',
       childrenCount: 2
-    }
-  );
+    };
+  });
 
   // Housing Request State
   const [housingRequest, setHousingRequest] = useState<HousingRequestInfo>(
@@ -127,6 +154,7 @@ export const DossierForm: React.FC<DossierFormProps> = ({
       situationFamiliale: { present: true, marriageCert: true, spouseAttestation: false, childrenCertificates: true },
       engagementHonneur: { present: true, isLegalized: true },
       pvInstallation: { present: true },
+      attestationNonPropriete: { present: false },
       ficheVisite: { present: false },
       ficheControle: { present: false }
     }
@@ -137,6 +165,12 @@ export const DossierForm: React.FC<DossierFormProps> = ({
 
   // المذكرة 40: السكن الوظيفي يُسند بحكم المسؤولية والمهام، بدون شبكة تنقيط ولا ترتيب.
   const isFonction = housingRequest.housingType === 'fonction';
+
+  const conditionsAnswered = ELIGIBILITY_QUESTIONS.every((q) => candidate[q.key] !== undefined);
+  const conditionsMet = meetsEligibilityConditions(candidate);
+  const failedConditions = ELIGIBILITY_QUESTIONS.filter((q) =>
+    q.key === 'worksInSameCity' ? candidate[q.key] === false : candidate[q.key] === true
+  ).map((q) => q.failLabel);
 
   // Files staged for the 6 mandatory supporting documents (step 4). They are
   // uploaded to the backend once the dossier itself has been saved -- a new
@@ -359,6 +393,26 @@ export const DossierForm: React.FC<DossierFormProps> = ({
       return;
     }
 
+    // المرحلة أ من المذكرة 40: ملف السكن الإداري لا يُقبل بدون شروط الترشح
+    // وبدون شهادة عدم امتلاك السكن السارية الصلاحية (شهران من تاريخها).
+    if (!isFonction) {
+      if (!conditionsAnswered) {
+        warnField('يرجى الإجابة على أسئلة شروط الترشح الثلاثة (الخطوة 2) قبل إيداع الملف.');
+        setActiveStep(2);
+        return;
+      }
+      if (!documents.attestationNonPropriete?.present) {
+        warnField('شهادة عدم امتلاك السكن (مصالح الضريبة) وثيقة إلزامية في ملف الترشح: يرجى ضمّها في الخطوة 4.');
+        setActiveStep(4);
+        return;
+      }
+      if (isNonOwnershipCertificateExpired(documents.attestationNonPropriete?.date)) {
+        warnField('انتهت صلاحية شهادة عدم امتلاك السكن: عمرها أكثر من شهرين. يجب تجديد الوثيقة قبل إيداع الملف.');
+        setActiveStep(4);
+        return;
+      }
+    }
+
     // Central register link is automatic: reuse the vacant entry of the
     // candidate's établissement, or register one on the fly if none exists yet.
     let registreLogementId: number | null = autoMatchedLogement?.id ?? null;
@@ -410,6 +464,7 @@ export const DossierForm: React.FC<DossierFormProps> = ({
             seniorityEtablissementPts: 0,
             scalePts: 0,
             maritalPts: 0,
+            soleIncomePts: 0,
             childrenPts: 0,
             responsibilityBonus: 0,
             performancePts: 0,
@@ -444,7 +499,7 @@ export const DossierForm: React.FC<DossierFormProps> = ({
     { number: 1, label: 'السكن المطلوب', icon: Home },
     { number: 2, label: 'معلومات المترشح', icon: User },
     { number: 3, label: 'الوضع العائلي', icon: Users },
-    { number: 4, label: isFonction ? 'الوثائق المطلوبة' : 'الوثائق الست المطلوبة', icon: FileCheck },
+    { number: 4, label: isFonction ? 'الوثائق المطلوبة' : situationFamiliale.maritalStatus === 'celibataire' ? 'الوثائق الست المطلوبة' : 'الوثائق السبع المطلوبة', icon: FileCheck },
     ...(isFonction
       ? []
       : [{ number: 5, label: 'احتساب شبكة التنقيط', icon: Calculator }])
@@ -580,6 +635,8 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                     onChange={(e) => setCandidate({ ...candidate, scale: Number(e.target.value) })}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 focus:bg-white font-mono"
                   >
+                    <option value={7}>السلم 7</option>
+                    <option value={8}>السلم 8</option>
                     <option value={9}>السلم 9</option>
                     <option value={10}>السلم 10</option>
                     <option value={11}>السلم 11</option>
@@ -609,11 +666,11 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                   onChange={(e) => setCandidate({ ...candidate, seniorityGeneral: Number(e.target.value) })}
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 focus:bg-white font-mono"
                 />
-                <span className="text-[10px] text-slate-400">تمنح 1 نقطة عن كل سنة في شبكة التنقيط</span>
+                <span className="text-[10px] text-slate-400">6 أشطر: 1-4 (1) · 5-9 (2) · 10-14 (3) · 15-19 (4) · 20-24 (5) · 25 فأكثر (6)</span>
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">الأقدمية في المؤسسة الحالية (سنوات)</label>
+                <label className="block font-semibold text-slate-700 mb-1">الأقدمية بنفس المدينة (سنوات)</label>
                 <input
                   type="number"
                   min={0}
@@ -622,7 +679,7 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                   onChange={(e) => setCandidate({ ...candidate, seniorityEtablissement: Number(e.target.value) })}
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 focus:bg-white font-mono"
                 />
-                <span className="text-[10px] text-slate-400">تمنح 2 نقط عن كل سنة استقرار بالمؤسسة</span>
+                <span className="text-[10px] text-slate-400">من سنة إلى 5 (1 نقطة) · 6 سنوات فأكثر (2 نقط)</span>
               </div>
 
               <div>
@@ -709,6 +766,51 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                   />
                 </div>
               </div>
+
+              {/* المرحلة أ من المذكرة 40: شروط الترشح الثلاثة */}
+              {!isFonction && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-3">
+                  <div>
+                    <div className="font-bold text-slate-900">شروط الترشح (المرحلة أ)</div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      يجب أن تجيب عنها مصلحة الموارد البشرية قبل إدراج اسم المترشح(ة) في لائحة المتبارين.
+                    </p>
+                  </div>
+
+                  {ELIGIBILITY_QUESTIONS.map((q) => (
+                    <div key={q.key} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="text-[11px] text-slate-700">{q.label}</span>
+                      <div className="flex items-center gap-4 shrink-0">
+                        {[true, false].map((answer) => (
+                          <label key={String(answer)} className="flex items-center gap-1.5 cursor-pointer text-[11px]">
+                            <input
+                              type="radio"
+                              name={q.key}
+                              checked={candidate[q.key] === answer}
+                              onChange={() => setCandidate({ ...candidate, [q.key]: answer } as CandidateInfo)}
+                            />
+                            <span>{answer ? 'نعم' : 'لا'}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+
+                  {!conditionsAnswered ? (
+                    <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                      لم تُجب بعد عن شروط الترشح الثلاثة: لا يمكن اعتبار الملف مستوفياً للشروط.
+                    </div>
+                  ) : !conditionsMet ? (
+                    <div className="text-[11px] text-rose-800 bg-rose-50 border border-rose-200 rounded-lg p-2">
+                      الملف غير مستوفٍ لشروط الترشح: {failedConditions.join(' · ')}
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2">
+                      المترشح(ة) مستوف(ة) لشروط الترشح المنصوص عليها في المذكرة 40.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -724,7 +826,7 @@ export const DossierForm: React.FC<DossierFormProps> = ({
               <p className="text-xs text-slate-500 mt-1">
                 {isFonction
                   ? 'في مسطرة السكن الوظيفي تُكتفى بالحالة العائلية (متزوج(ة) أو أعزب) للمعلومة: لا نقطة عن الزوج(ة) ولا عن الأطفال، ولا تُطلب وثائق الوضع العائلي.'
-                  : 'حسب المذكرة 40: أعزب = 0 نقطة، نقطتان عن الزوج(ة) غير العامل(ة)، ونقطة عن كل طفل في حدود 3 أطفال.'}
+                  : 'حسب المذكرة 40: أعزب = 0 نقطة، 3 نقط عن الزوج(ة) الذي(ة) لا يمارس(ت) مهنة، نقطتان عن الراتب الوحيد، ونقطة عن كل طفل في حدود 3 أطفال.'}
               </p>
             </div>
 
@@ -739,7 +841,9 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                     setSituationFamiliale({
                       ...situationFamiliale,
                       maritalStatus: ms,
-                      ...(ms === 'celibataire' ? { spouseIsPublicOfficial: false, childrenCount: 0 } : {}),
+                      ...(ms === 'celibataire'
+                        ? { spouseIsPublicOfficial: false, spouseOccupation: undefined, childrenCount: 0 }
+                        : {}),
                     });
                     setDocuments(prev => ({
                       ...prev,
@@ -748,7 +852,7 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                   }}
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 focus:bg-white"
                 >
-                  <option value="marie">{isFonction ? 'متزوج(ة)' : 'متزوج(ة) - 2 نقط (زوج غير عامل)'}</option>
+                  <option value="marie">{isFonction ? 'متزوج(ة)' : 'متزوج(ة)'}</option>
                   <option value="celibataire">{isFonction ? 'عازب(ة)' : 'عازب(ة) - 0 نقطة'}</option>
                   <option value="divorce">{isFonction ? 'مطلق(ة)' : 'مطلق(ة) - 0 نقطة'}</option>
                   <option value="veuf">{isFonction ? 'أرمل(ة)' : 'أرمل(ة) - 0 نقطة'}</option>
@@ -771,28 +875,41 @@ export const DossierForm: React.FC<DossierFormProps> = ({
               )}
 
               {!isFonction && situationFamiliale.maritalStatus === 'marie' && (
-                <div className="space-y-2">
-                  <label className="block font-semibold text-slate-700">{candidate.gender === 'female' ? 'هل الزوج يمارس وظيفة عمومية؟' : 'هل الزوجة تمارس وظيفة عمومية؟'}</label>
-                  <div className="flex items-center gap-4 pt-1">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="spouseOfficial"
-                        checked={situationFamiliale.spouseIsPublicOfficial}
-                        onChange={() => setSituationFamiliale({ ...situationFamiliale, spouseIsPublicOfficial: true })}
-                      />
-                      <span>نعم ({candidate.gender === 'female' ? 'موظف بالقطاع العام' : 'موظفة بالقطاع العام'})</span>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      الوضعية المهنية لل{candidate.gender === 'female' ? 'زوج' : 'زوجة'}
                     </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="spouseOfficial"
-                        checked={!situationFamiliale.spouseIsPublicOfficial}
-                        onChange={() => setSituationFamiliale({ ...situationFamiliale, spouseIsPublicOfficial: false })}
-                      />
-                      <span>لا (قطاع خاص / لا يعمل)</span>
-                    </label>
+                    <select
+                      value={situationFamiliale.spouseOccupation ?? 'no_work'}
+                      onChange={(e) => {
+                        const occupation = e.target.value as SpouseOccupation;
+                        setSituationFamiliale({
+                          ...situationFamiliale,
+                          spouseOccupation: occupation,
+                          spouseIsPublicOfficial: occupation === 'public_sector',
+                        });
+                      }}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 focus:bg-white"
+                    >
+                      {(Object.keys(SPOUSE_OCCUPATION_LABELS) as SpouseOccupation[]).map((k) => (
+                        <option key={k} value={k}>{SPOUSE_OCCUPATION_LABELS[k]}</option>
+                      ))}
+                    </select>
+                    <span className="text-[10px] text-slate-400">
+                      3 نقط للزوج(ة) الذي(ة) لا يمارس(ت) مهنة · نقطتان إضافيتان عند الراتب الوحيد
+                    </span>
                   </div>
+
+                  <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!situationFamiliale.soleFamilyIncome}
+                      onChange={(e) => setSituationFamiliale({ ...situationFamiliale, soleFamilyIncome: e.target.checked })}
+                      className="w-4 h-4 rounded border-slate-300 text-emerald-600"
+                    />
+                    <span>الأسرة لا تعتمد إلا على راتب وحيد (المعيار: الراتب الوحيد - 2 نقط)</span>
+                  </label>
                 </div>
               )}
             </div>
@@ -928,15 +1045,15 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                 <span>
                   {isFonction
                     ? '4. الوثائق الثلاث المطلوبة في مسطرة السكن الوظيفي'
-                    : `4. التحقق من الوثائق ${situationFamiliale.maritalStatus === 'celibataire' ? 'الخمس' : 'الست'} الإلزامية المكونة للملف (Dossier de Demande)`}
+                    : `4. التحقق من الوثائق ${situationFamiliale.maritalStatus === 'celibataire' ? 'الست' : 'السبع'} الإلزامية المكونة للملف (Dossier de Demande)`}
                 </span>
               </h3>
               <p className="text-xs text-slate-500 mt-1">
                 {isFonction
                   ? 'لا تباري ولا لجنة إسناد ولا شبكة تنقيط: يُكتفى بالالتزام (المطبوع 3) وباستكمال بطاقتي المعاينة والمراقبة (المطبوعان 5 و9) بعد الترخيص بالسكن.'
                   : situationFamiliale.maritalStatus === 'celibataire'
-                  ? 'المترشح(ة) عازب(ة): لا تُطلب وثائق الوضع العائلي. يكفي 5 وثائق إلزامية.'
-                  : 'هذه الوثائق تدقق بمصلحة الموارد البشرية بالمديرية الإقليمية (DP) قبل الإحالة على الأكاديمية الجهوية (AREF).'}
+                  ? 'المترشح(ة) عازب(ة): لا تُطلب وثائق الوضع العائلي. يكفي 6 وثائق إلزامية.'
+                  : '6 وثائق إلزامية مضافاً إليها شهادة عدم امتلاك السكن. تدقق بمصلحة الموارد البشرية بالمديرية الإقليمية (DP) قبل الإحالة على الأكاديمية الجهوية (AREF).'}
               </p>
             </div>
 
@@ -1142,6 +1259,45 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                 </div>
                 {renderDocFileControl('pvInstallation')}
               </div>
+
+              {/* Doc 7: شهادة عدم امتلاك السكن (المرحلة أ من المذكرة 40)، صالحة شهرين من تاريخها */}
+              <div className="grid grid-cols-1 items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs sm:grid-cols-[minmax(0,1fr)_13rem]">
+                <div className="min-w-0 space-y-1">
+                  <div className="font-bold text-slate-900">7. شهادة عدم امتلاك السكن (مصالح الضريبة)</div>
+                  <div className="text-slate-500 text-[11px]">
+                    شهادة إدارية من مصالح الضريبة تثبت أن المترشح لا يتوفر على سكن في ملكيته،
+                    لا يتجاوز عمرها شهرين (2) عند إيداع الملف.
+                  </div>
+                  <div className="pt-1">
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">تاريخ الشهادة</label>
+                    <input
+                      type="date"
+                      value={documents.attestationNonPropriete?.date || ''}
+                      onChange={(e) => setDocuments({
+                        ...documents,
+                        attestationNonPropriete: {
+                          ...(documents.attestationNonPropriete as any),
+                          present: documents.attestationNonPropriete?.present ?? false,
+                          date: e.target.value,
+                        }
+                      } as RequiredDocumentsChecklist)}
+                      className="w-full sm:w-40 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  {documents.attestationNonPropriete?.present && !documents.attestationNonPropriete?.date && (
+                    <div className="text-[10px] font-semibold text-amber-700">
+                      حدد تاريخ الشهادة للتحقق من صلاحيتها.
+                    </div>
+                  )}
+                  {isNonOwnershipCertificateExpired(documents.attestationNonPropriete?.date) && (
+                    <div className="flex items-center gap-1.5 rounded-md bg-rose-50 px-2 py-1.5 text-[10px] font-semibold text-rose-700">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      انتهت صلاحية الشهادة: عمرها أكثر من شهرين، يجب تجديد قبل إيداع الملف.
+                    </div>
+                  )}
+                </div>
+                {renderDocFileControl('attestationNonPropriete')}
+              </div>
             </div>
             )}
           </div>
@@ -1162,7 +1318,7 @@ export const DossierForm: React.FC<DossierFormProps> = ({
 
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
               {/* Official Note 40 criteria inputs (not auto-derived) */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
                     المردودية (المعيار 6)
@@ -1176,9 +1332,28 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                       <option key={k} value={k}>{PERFORMANCE_RATING_LABELS[k]}</option>
                     ))}
                   </select>
+                  <span className="text-[10px] text-slate-400">جيد جدا 4 · جيد 2 · مستحسن 1 · دون المستحسن 0</span>
                 </div>
 
-                <label className="flex items-center gap-2 pt-5 text-xs text-slate-700 cursor-pointer">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    المسؤولية الإدارية (المعيار 5)
+                  </label>
+                  <select
+                    value={candidate.responsibility ?? 'none'}
+                    onChange={(e) => setCandidate({ ...candidate, responsibility: e.target.value as AdministrativeResponsibility })}
+                    className="w-full py-1.5 px-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:border-emerald-500"
+                  >
+                    {(Object.keys(RESPONSIBILITY_LABELS) as AdministrativeResponsibility[]).map((k) => (
+                      <option key={k} value={k}>{RESPONSIBILITY_LABELS[k]}</option>
+                    ))}
+                  </select>
+                  <span className="text-[10px] text-slate-400">رئيس قسم 3 نقط · رئيس مصلحة 2 نقط</span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-6 pt-1 text-xs text-slate-700">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={!!candidate.isRuralArea}
@@ -1188,7 +1363,7 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                   <span>المؤسسة بالوسط القروي</span>
                 </label>
 
-                <label className="flex items-center gap-2 pt-5 text-xs text-slate-700 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={!!candidate.isRuralBranch}
@@ -1209,19 +1384,23 @@ export const DossierForm: React.FC<DossierFormProps> = ({
                 <div className="bg-white p-3 rounded-lg border border-slate-200">
                   <div className="text-[11px] text-slate-500">الأقدمية العامة</div>
                   <div className="text-xl font-mono font-bold text-slate-900 mt-1">{bareme.seniorityGeneralPts}</div>
-                  <div className="text-[10px] text-slate-400">5 أشطر (1 إلى 5 نقط)</div>
+                  <div className="text-[10px] text-slate-400">6 أشطر (1 إلى 6 نقط)</div>
                 </div>
 
                 <div className="bg-white p-3 rounded-lg border border-slate-200">
                   <div className="text-[11px] text-slate-500">الأقدمية بنفس المدينة</div>
                   <div className="text-xl font-mono font-bold text-slate-900 mt-1">{bareme.seniorityEtablissementPts}</div>
-                  <div className="text-[10px] text-slate-400">شطران (1 أو 2 نقط)</div>
+                  <div className="text-[10px] text-slate-400">1-5 (1) · 6 فأكثر (2)</div>
                 </div>
 
                 <div className="bg-white p-3 rounded-lg border border-slate-200">
                   <div className="text-[11px] text-slate-500">التحملات العائلية</div>
-                  <div className="text-xl font-mono font-bold text-slate-900 mt-1">{bareme.maritalPts + bareme.childrenPts}</div>
-                  <div className="text-[10px] text-slate-400">{bareme.childrenPts} أبناء + {bareme.maritalPts} زوج(ة)</div>
+                  <div className="text-xl font-mono font-bold text-slate-900 mt-1">
+                    {bareme.maritalPts + bareme.soleIncomePts + bareme.childrenPts}
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    {bareme.childrenPts} أبناء · {bareme.maritalPts} زوج(ة) · {bareme.soleIncomePts} راتب وحيد
+                  </div>
                 </div>
 
                 <div className="bg-white p-3 rounded-lg border border-slate-200">

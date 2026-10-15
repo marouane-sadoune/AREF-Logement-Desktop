@@ -15,7 +15,7 @@ import {
   Stamp,
   Award
 } from 'lucide-react';
-import { HousingDossier, PERFORMANCE_RATING_LABELS } from '../types/housing';
+import { HousingDossier, PERFORMANCE_RATING_LABELS, RESPONSIBILITY_LABELS, SPOUSE_OCCUPATION_LABELS } from '../types/housing';
 import { DocumentChecklistView } from './DocumentChecklistView';
 import { StatusTimeline } from './StatusTimeline';
 import { actionTitle } from '../utils/auditLabel';
@@ -241,13 +241,13 @@ export const DossierDetailModal: React.FC<DossierDetailModalProps> = ({
                     </tr>
                     <tr>
                       <td className="p-3 text-right font-medium">2. الأقدمية العامة</td>
-                      <td className="p-3 text-slate-500">5 أشطر: 1-5 (1) · 6-10 (2) · 11-15 (3) · 16-20 (4) · +20 (5)</td>
+                      <td className="p-3 text-slate-500">6 أشطر: 1-4 (1) · 5-9 (2) · 10-14 (3) · 15-19 (4) · 20-24 (5) · 25 فأكثر (6)</td>
                       <td className="p-3 font-mono">{candidate.seniorityGeneral} سنة</td>
                       <td className="p-3 font-mono font-bold text-emerald-800">{bareme.seniorityGeneralPts}</td>
                     </tr>
                     <tr>
                       <td className="p-3 text-right font-medium">3. الأقدمية بنفس المدينة</td>
-                      <td className="p-3 text-slate-500">من 2 إلى 5 سنوات (1) · 6 سنوات فأكثر (2)</td>
+                      <td className="p-3 text-slate-500">من سنة إلى 5 (1) · 6 سنوات فأكثر (2)</td>
                       <td className="p-3 font-mono">{candidate.seniorityEtablissement} سنوات</td>
                       <td className="p-3 font-mono font-bold text-emerald-800">{bareme.seniorityEtablissementPts}</td>
                     </tr>
@@ -259,19 +259,27 @@ export const DossierDetailModal: React.FC<DossierDetailModalProps> = ({
                     </tr>
                     <tr>
                       <td className="p-3 text-right font-medium">4. التحملات العائلية - الزوج(ة)</td>
-                      <td className="p-3 text-slate-500">نقطتان عن الزوج(ة) غير العامل(ة)</td>
-                      <td className="p-3">{situationFamiliale.maritalStatus === 'marie' ? (situationFamiliale.spouseIsPublicOfficial ? 'زوج(ة) عامل(ة)' : 'زوج(ة) غير عامل(ة)') : situationFamiliale.maritalStatus}</td>
+                      <td className="p-3 text-slate-500">3 نقط عن الزوج(ة) الذي(ة) لا يمارس(ت) أي مهنة</td>
+                      <td className="p-3">{situationFamiliale.maritalStatus === 'marie'
+                        ? SPOUSE_OCCUPATION_LABELS[situationFamiliale.spouseOccupation ?? 'no_work']
+                        : situationFamiliale.maritalStatus}</td>
                       <td className="p-3 font-mono font-bold text-emerald-800">{bareme.maritalPts}</td>
                     </tr>
                     <tr>
+                      <td className="p-3 text-right font-medium">4. التحملات العائلية - الراتب الوحيد</td>
+                      <td className="p-3 text-slate-500">نقطتان عن الأسرة التي لا تعتمد إلا على راتب وحيد</td>
+                      <td className="p-3">{situationFamiliale.soleFamilyIncome ? 'راتب وحيد' : '—'}</td>
+                      <td className="p-3 font-mono font-bold text-emerald-800">{bareme.soleIncomePts}</td>
+                    </tr>
+                    <tr>
                       <td className="p-3 text-right font-medium">5. المسؤولية الإدارية</td>
-                      <td className="p-3 text-slate-500">رئيس قسم / مؤسسة (3) · رئيس مصلحة (2)</td>
-                      <td className="p-3">{candidate.grade}</td>
+                      <td className="p-3 text-slate-500">رئيس قسم (3) · رئيس مصلحة (2)</td>
+                      <td className="p-3">{RESPONSIBILITY_LABELS[candidate.responsibility ?? 'none']}</td>
                       <td className="p-3 font-mono font-bold text-emerald-800">{bareme.responsibilityBonus}</td>
                     </tr>
                     <tr>
                       <td className="p-3 text-right font-medium">6. المردودية</td>
-                      <td className="p-3 text-slate-500">جيد جدا (3) · جيد (2) · مستحسن (1) · دون المستحسن (0)</td>
+                      <td className="p-3 text-slate-500">جيد جدا (4) · جيد (2) · مستحسن (1) · دون المستحسن (0)</td>
                       <td className="p-3">{PERFORMANCE_RATING_LABELS[candidate.performanceRating ?? 'satisfactory']}</td>
                       <td className="p-3 font-mono font-bold text-emerald-800">{bareme.performancePts ?? 0}</td>
                     </tr>
