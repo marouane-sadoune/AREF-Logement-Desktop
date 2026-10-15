@@ -13,8 +13,8 @@ import { AuditWorkflowModal } from './components/AuditWorkflowModal';
 import { RegulationsGuide } from './components/RegulationsGuide';
 import { DatabaseBackup } from './components/DatabaseBackup';
 import { DossierDetailModal } from './components/DossierDetailModal';
-import { UserSwitcherModal } from './components/UserSwitcherModal';
 import { UserManagementView } from './components/UserManagementView';
+import { AuthLogView } from './components/AuthLogView';
 import { SignInView } from './components/SignInView';
 import { ArchiveView } from './components/ArchiveView';
 import { CompareView } from './components/CompareView';
@@ -40,7 +40,6 @@ function HousingWorkspace() {
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>('dossiers');
-  const [showUserSwitcher, setShowUserSwitcher] = useState(false);
 
   // Dossiers are loaded from the Laravel API; the backend is the source of truth.
   const [dossiers, setDossiers] = useState<HousingDossier[]>([]);
@@ -309,7 +308,6 @@ function HousingWorkspace() {
           }}
           dossiers={activeDossiers}
           archivedCount={archivedDossiers.length}
-          onOpenUserSwitcher={() => setShowUserSwitcher(true)}
           onOpenNewDossier={() => {
             setEditingDossier(null);
             setActiveTab('new_dossier');
@@ -496,6 +494,9 @@ function HousingWorkspace() {
             {/* View: User Management View (4 Roles & DPs) */}
             {activeTab === 'users' && permissions.canManageUsers && <UserManagementView />}
 
+            {/* View: Auth & Security Log (dev + directeur académique) */}
+            {activeTab === 'authlog' && permissions.canViewAuthLog && <AuthLogView />}
+
             {/* View: Regulations & Circular 40 Guide */}
             {activeTab === 'regulations' && <RegulationsGuide />}
 
@@ -542,20 +543,23 @@ function HousingWorkspace() {
 
 
 
-      {/* Modal: User Profile Switcher (Testing the 4 Roles) */}
-      <UserSwitcherModal
-        isOpen={showUserSwitcher}
-        onClose={() => setShowUserSwitcher(false)}
-      />
     </div>
   );
 }
 
 function DesktopHousingApp() {
-  const { isAuthenticated, signIn } = useAuth();
+  const { isAuthenticated, authChecked } = useAuth();
+
+  if (!authChecked) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-100 text-xs text-slate-500" dir="rtl">
+        <p>جارٍ التحقق من الجلسة…</p>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
-    return <SignInView onSignIn={signIn} />;
+    return <SignInView />;
   }
 
   return <HousingWorkspace />;

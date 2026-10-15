@@ -15,7 +15,9 @@ class AuthToken extends Model
 
     public $incrementing = false;
 
-    protected $guarded = ['token'];
+    public $timestamps = false;
+
+    protected $fillable = ['token', 'user_id', 'created_at', 'last_used_at', 'expires_at'];
 
     protected $casts = [
         'created_at' => 'datetime',

@@ -17,6 +17,7 @@ import { HousingDossier } from '../types/housing';
 import { PERFORMANCE_RATING_LABELS } from '../types/housing';
 import { ArefOfficialHeader } from './ArefOfficialHeader';
 import { OfficialFormSheet } from './OfficialFormSheets';
+import { useAuth } from '../context/AuthContext';
 
 interface DocumentGeneratorProps {
   dossiers: HousingDossier[];
@@ -25,6 +26,32 @@ interface DocumentGeneratorProps {
 }
 
 const OVERRIDE_PREFIX = 'aref-doc-text:';
+
+// النماذج المحجوزة للأكاديمية: ممثل المديرية الإقليمية لا يراها ولا يطبعها.
+const ALL_DOC_TYPES = [
+  {
+    id: 'accord_attribution',
+    label: 'رسالة الموافقة على إسناد سكن وظيفي (نموذج الأكاديمية)',
+    sub: 'Lettre d\'accord (Envoyée à la DP)',
+    isHighlight: true,
+    arefOnly: true
+  },
+  { id: 'demande', label: 'الطلب الخطي الموجه للمدير الإقليمي', sub: 'Demande Manuscrite', arefOnly: false },
+  { id: 'engagement', label: 'مطبوع الالتزام والتصريح بالشرف', sub: "Engagement (Note 40)", arefOnly: false },
+  { id: 'fiche_bareme', label: 'بطاقة المعلومات وشبكة التنقيط', sub: 'Fiche & Barème', arefOnly: false },
+  { id: 'recepisse', label: 'وصل إيداع الملف بالمديرية (DP)', sub: 'Récépissé de Dépôt', arefOnly: false },
+  { id: 'bordereau', label: 'جدول الإرسال إلى الأكاديمية (AREF)', sub: 'Bordereau d\'Envoi', arefOnly: false },
+  { id: 'pv_possession', label: 'محضر تسلّم السكن ومعاينة الأماكن', sub: 'PV Prise de Possession', arefOnly: false },
+  { id: 'official_1', label: 'المطبوع 1: طلب المشاركة في التباري', sub: 'Demande de participation', arefOnly: false },
+  { id: 'official_2', label: 'المطبوع 2: محضر لجنة الإسناد', sub: 'PV commission d\'attribution', arefOnly: true },
+  { id: 'official_3', label: 'المطبوع 3: التزام (وجوبا/مجانا/قانون)', sub: 'Engagement (obligatoire)', arefOnly: false },
+  { id: 'official_4', label: 'المطبوع 4: التزام (المسكنون بالفعل)', sub: 'Engagement (de facto)', arefOnly: false },
+  { id: 'official_5', label: 'المطبوع 5: بطاقة معاينة السكن', sub: 'Fiche d\'inspection', arefOnly: false },
+  { id: 'official_6', label: 'المطبوع 6: البطاقة رقم 1', sub: 'Fiche n°1 (logement créé)', arefOnly: true },
+  { id: 'official_7', label: 'المطبوع 7: البطاقة رقم 2', sub: 'Fiche n°2 (modifications)', arefOnly: true },
+  { id: 'official_8', label: 'المطبوع 8: بطاقة إشعار', sub: 'Fiche de notification', arefOnly: true },
+  { id: 'official_9', label: 'المطبوع 9: بطاقة مراقبة السكن', sub: 'Fiche de contrôle', arefOnly: false }
+];
 
 function readDocOverrides(): Record<string, string> {
   const out: Record<string, string> = {};
@@ -50,12 +77,20 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
   selectedDossierId,
   defaultDocType = 'accord_attribution'
 }) => {
+  const { currentUser } = useAuth();
+  // المديرية الإقليمية لا تطبع وثائق الأكاديمية (الموافقة ولجنة الإسناد والبطاقات 1 و2 والإشعار).
+  const isDpAgent = currentUser.role === 'dp_agent';
+  const docTypes = isDpAgent ? ALL_DOC_TYPES.filter(d => !d.arefOnly) : ALL_DOC_TYPES;
+
   const [selectedId, setSelectedId] = useState<string>(
     selectedDossierId || (dossiers.length > 0 ? dossiers[0].id : '')
   );
-  const [activeDocType, setActiveDocType] = useState<string>(
+  const [requestedDocType, setRequestedDocType] = useState<string>(
     defaultDocType === 'all' ? 'accord_attribution' : defaultDocType
   );
+  const activeDocType = docTypes.some(d => d.id === requestedDocType)
+    ? requestedDocType
+    : docTypes[0].id;
 
   const activeDossier = dossiers.find((d) => d.id === selectedId) || dossiers[0];
 
@@ -115,30 +150,6 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
   };
 
   const hasOverride = overrides[overrideKey] !== undefined;
-
-  const docTypes = [
-    { 
-      id: 'accord_attribution', 
-      label: 'رسالة الموافقة على إسناد سكن وظيفي (نموذج الأكاديمية)', 
-      sub: 'Lettre d\'accord (Envoyée à la DP)',
-      isHighlight: true
-    },
-    { id: 'demande', label: 'الطلب الخطي الموجه للمدير الإقليمي', sub: 'Demande Manuscrite' },
-    { id: 'engagement', label: 'مطبوع الالتزام والتصريح بالشرف', sub: "Engagement (Note 40)" },
-    { id: 'fiche_bareme', label: 'بطاقة المعلومات وشبكة التنقيط', sub: 'Fiche & Barème' },
-    { id: 'recepisse', label: 'وصل إيداع الملف بالمديرية (DP)', sub: 'Récépissé de Dépôt' },
-    { id: 'bordereau', label: 'جدول الإرسال إلى الأكاديمية (AREF)', sub: 'Bordereau d\'Envoi' },
-    { id: 'pv_possession', label: 'محضر تسلّم السكن ومعاينة الأماكن', sub: 'PV Prise de Possession' },
-    { id: 'official_1', label: 'المطبوع 1: طلب المشاركة في التباري', sub: 'Demande de participation' },
-    { id: 'official_2', label: 'المطبوع 2: محضر لجنة الإسناد', sub: 'PV commission d\'attribution' },
-    { id: 'official_3', label: 'المطبوع 3: التزام (وجوبا/مجانا/قانون)', sub: 'Engagement (obligatoire)' },
-    { id: 'official_4', label: 'المطبوع 4: التزام (المسكنون بالفعل)', sub: 'Engagement (de facto)' },
-    { id: 'official_5', label: 'المطبوع 5: بطاقة معاينة السكن', sub: 'Fiche d\'inspection' },
-    { id: 'official_6', label: 'المطبوع 6: البطاقة رقم 1', sub: 'Fiche n°1 (logement créé)' },
-    { id: 'official_7', label: 'المطبوع 7: البطاقة رقم 2', sub: 'Fiche n°2 (modifications)' },
-    { id: 'official_8', label: 'المطبوع 8: بطاقة إشعار', sub: 'Fiche de notification' },
-    { id: 'official_9', label: 'المطبوع 9: بطاقة مراقبة السكن', sub: 'Fiche de contrôle' }
-  ];
 
   return (
     <div className="space-y-6">
@@ -225,7 +236,7 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
               {docTypes.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => switchTo(() => setActiveDocType(tab.id))}
+                  onClick={() => switchTo(() => setRequestedDocType(tab.id))}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                     activeDocType === tab.id
                       ? 'bg-slate-900 text-white shadow-xs'

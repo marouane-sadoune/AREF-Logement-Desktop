@@ -18,17 +18,21 @@ class AuthLog extends Model
         'success' => 'boolean',
     ];
 
-    // تسجيل حدث مصادقة (دخول/فشل/خروج/إنشاء مستخدم...) مع مصدر الطلب.
-    public static function record(Request $request, string $event, bool $success = true, ?AppUser $user = null, ?string $username = null, ?string $reason = null): void
+    // تسجيل حدث مصادقة أو إدارة حسابات مع مصدر الطلب.
+    // $context: actor | attempted | target | reason | success
+    public static function record(Request $request, string $event, array $context = []): void
     {
+        $actor = $context['actor'] ?? null;
+
         static::create([
-            'user_id' => $user?->id,
-            'username' => $user?->username ?? $username,
+            'user_id' => $actor?->id,
+            'username' => $actor?->username ?? ($context['attempted'] ?? null),
             'event' => $event,
-            'success' => $success,
-            'reason' => $reason,
-            'role' => $user?->role,
-            'dp_code' => $user?->dp_code,
+            'success' => $context['success'] ?? true,
+            'reason' => $context['reason'] ?? null,
+            'target_username' => $context['target'] ?? null,
+            'role' => $actor?->role,
+            'dp_code' => $actor?->dp_code,
             'ip_address' => $request->ip(),
             'user_agent' => substr((string) $request->userAgent(), 0, 255),
             'created_at' => now(),

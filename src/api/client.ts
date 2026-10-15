@@ -1,6 +1,31 @@
 ﻿import { HousingDossier, DossierStatus, EvictionProcedure, RegistreLogement } from '../types/housing';
 
-export const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1';
+// النسبي '/api/v1' يعمل داخل التطبيق المُغلَّف (نافذة NativePHP تفتح نفس المنفذ
+// الذي يشغّل Laravel) وفي التطوير على أي منفذ، فلا يعلق التطبيق بمنفذ ثابت.
+export const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || '/api/v1';
+
+const TOKEN_KEY = 'aref_auth_token';
+
+export function getAuthToken(): string {
+  return localStorage.getItem(TOKEN_KEY) || '';
+}
+
+export function setAuthToken(token: string): void {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+// جلسة منتهية/مُلغاة من أي نقطة API تُخرج التطبيق من الدخول مباشرة.
+function handleUnauthorized(path: string) {
+  if (path.startsWith('/auth/')) return;
+  setAuthToken('');
+  window.dispatchEvent(new Event('aref:unauthorized'));
+}
 
 async function request(path: string, options: RequestInit = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -8,12 +33,14 @@ async function request(path: string, options: RequestInit = {}) {
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
+      ...authHeaders(),
       ...options.headers,
     },
   });
 
   const body = await res.json().catch(() => null);
   if (!res.ok) {
+    if (res.status === 401) handleUnauthorized(path);
     const message = body?.message || `${res.status} ${res.statusText}`;
     throw new Error(message);
   }
@@ -317,11 +344,12 @@ export async function uploadDossierDocument(
 
   const res = await fetch(`${API_BASE}/assignments/${dossierId}/documents/${backendKey}`, {
     method: 'POST',
-    headers: { Accept: 'application/json' },
+    headers: { Accept: 'application/json', ...authHeaders() },
     body: formData,
   });
   const body = await res.json().catch(() => null);
   if (!res.ok) {
+    if (res.status === 401) handleUnauthorized(`/assignments/documents`);
     throw new Error(body?.message || `${res.status} ${res.statusText}`);
   }
   return body;
@@ -338,11 +366,12 @@ export async function uploadChildrenCertificates(
 
   const res = await fetch(`${API_BASE}/assignments/${dossierId}/documents/situation_familiale_enfants`, {
     method: 'POST',
-    headers: { Accept: 'application/json' },
+    headers: { Accept: 'application/json', ...authHeaders() },
     body: formData,
   });
   const body = await res.json().catch(() => null);
   if (!res.ok) {
+    if (res.status === 401) handleUnauthorized(`/assignments/documents`);
     throw new Error(body?.message || `${res.status} ${res.statusText}`);
   }
   return body;
@@ -350,10 +379,16 @@ export async function uploadChildrenCertificates(
 
 // URL to view/download an already-uploaded supporting document.
 // `index` selects one file when the key stores several (birth certificates).
+// الجلسة تُمرَّر عبر ?t= لأن هذه الروابط تُفتح مباشرة (صور/روابط) ولا تُرسل ترويسة.
 export function getDossierDocumentUrl(dossierId: string, docKey: string, index?: number): string {
   const backendKey = SUPPORTING_DOC_KEYS[docKey];
+  const params = new URLSearchParams();
+  if (index !== undefined) params.set('index', String(index));
+  const token = getAuthToken();
+  if (token) params.set('t', token);
+  const query = params.toString();
   const url = `${API_BASE}/assignments/${dossierId}/documents/${backendKey}`;
-  return index === undefined ? url : `${url}?index=${index}`;
+  return query ? `${url}?${query}` : url;
 }
 
 // ===== مساطر الإفراغ (المحور 4 من المذكرة 40) =====
@@ -430,4 +465,122 @@ export async function updateLogement(
 
 export async function deleteLogement(id: number): Promise<void> {
   await request(`/logements/${id}`, { method: 'DELETE' });
+}
+
+// ===== المصادقة، الحسابات وسجلّ الدخول =====
+
+export interface ApiUser {
+  id: number;
+  username: string;
+  full_name: string;
+  role: string;
+  dp_code?: string | null;
+  dp_name_ar?: string | null;
+  title?: string | null;
+  is_active: boolean;
+  has_password: boolean;
+  last_login_at?: string | null;
+}
+
+export interface AuthSession {
+  token: string;
+  user: ApiUser;
+}
+
+export interface AuthLogEntry {
+  id: number;
+  username: string | null;
+  event: string;
+  success: boolean;
+  reason: string | null;
+  target_username: string | null;
+  role: string | null;
+  dp_code: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string | null;
+}
+
+export async function fetchAuthStatus(): Promise<{ needs_setup: boolean; username: string | null }> {
+  return request('/auth/status');
+}
+
+export async function setupAdministrator(input: {
+  username: string;
+  full_name: string;
+  password: string;
+}): Promise<AuthSession> {
+  const body = await request('/auth/setup', { method: 'POST', body: JSON.stringify(input) });
+  return body.data;
+}
+
+export async function apiSignIn(username: string, password: string): Promise<AuthSession> {
+  const body = await request('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+  return body.data;
+}
+
+export async function apiSignOut(): Promise<void> {
+  await request('/auth/logout', { method: 'POST' });
+}
+
+export async function fetchCurrentUser(): Promise<ApiUser> {
+  const body = await request('/auth/me');
+  return body.data;
+}
+
+export async function changeOwnPassword(currentPassword: string, password: string): Promise<void> {
+  await request('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ current_password: currentPassword, password }),
+  });
+}
+
+export async function fetchAuthLogs(params: {
+  event?: string;
+  username?: string;
+  success?: string;
+  page?: number;
+} = {}): Promise<{ data: AuthLogEntry[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (params.event) qs.set('event', params.event);
+  if (params.username) qs.set('username', params.username);
+  if (params.success) qs.set('success', params.success);
+  if (params.page) qs.set('page', String(params.page));
+  const query = qs.toString();
+  return request(`/auth/logs${query ? `?${query}` : ''}`);
+}
+
+export async function fetchUsers(): Promise<ApiUser[]> {
+  const body = await request('/users');
+  return body.data || [];
+}
+
+export async function createUserAccount(input: {
+  username: string;
+  full_name: string;
+  role: string;
+  dp_code?: string | null;
+  dp_name_ar?: string | null;
+  title?: string | null;
+  password: string;
+  is_active?: boolean;
+}): Promise<ApiUser> {
+  const body = await request('/users', { method: 'POST', body: JSON.stringify(input) });
+  return body.data;
+}
+
+export async function updateUserAccount(
+  id: number,
+  changes: Partial<Pick<ApiUser, 'full_name' | 'role' | 'dp_code' | 'dp_name_ar' | 'title' | 'is_active'>>
+): Promise<ApiUser> {
+  const body = await request(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(changes) });
+  return body.data;
+}
+
+export async function resetUserPassword(id: number, password: string): Promise<void> {
+  await request(`/users/${id}/password`, { method: 'POST', body: JSON.stringify({ password }) });
+}
+
+export async function deleteUserAccount(id: number): Promise<void> {
+  await request(`/users/${id}`, { method: 'DELETE' });
 }

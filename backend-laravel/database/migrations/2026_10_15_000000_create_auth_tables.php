@@ -37,6 +37,7 @@ return new class extends Migration
             $table->string('event');
             $table->boolean('success')->default(true);
             $table->string('reason')->nullable();
+            $table->string('target_username')->nullable();
             $table->string('role')->nullable();
             $table->string('dp_code')->nullable();
             $table->string('ip_address', 45)->nullable();

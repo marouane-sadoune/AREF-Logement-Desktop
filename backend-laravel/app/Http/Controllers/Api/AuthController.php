@@ -76,7 +76,7 @@ class AuthController extends Controller
             return $user;
         });
 
-        AuthLog::record($request, 'setup', true, $admin);
+        AuthLog::record($request, 'setup', ['actor' => $admin]);
 
         return response()->json([
             'message' => 'تم ضبط مسؤول النظام بنجاح.',
@@ -95,31 +95,31 @@ class AuthController extends Controller
         $user = AppUser::whereRaw('lower(username) = ?', [$username])->first();
 
         if (! $user) {
-            AuthLog::record($request, 'login_failed', false, null, $username, 'unknown_user');
+            AuthLog::record($request, 'login_failed', ['attempted' => $username, 'reason' => 'unknown_user', 'success' => false]);
 
             return response()->json(['message' => 'اسم المستخدم أو كلمة السر غير صحيحة.'], 401);
         }
 
         if (! $user->is_active) {
-            AuthLog::record($request, 'login_failed', false, $user, $username, 'disabled');
+            AuthLog::record($request, 'login_failed', ['actor' => $user, 'reason' => 'disabled', 'success' => false]);
 
             return response()->json(['message' => 'هذا الحساب غير مُفعّل بعد. تواصل مع مسؤول النظام.'], 403);
         }
 
         if (empty($user->password_hash)) {
-            AuthLog::record($request, 'login_failed', false, $user, $username, 'password_not_set');
+            AuthLog::record($request, 'login_failed', ['actor' => $user, 'reason' => 'password_not_set', 'success' => false]);
 
             return response()->json(['message' => 'لم تُضبط كلمة سر لهذا الحساب بعد. تواصل مع مسؤول النظام.'], 403);
         }
 
         if (! $user->checkPassword($validated['password'])) {
-            AuthLog::record($request, 'login_failed', false, $user, $username, 'wrong_password');
+            AuthLog::record($request, 'login_failed', ['actor' => $user, 'reason' => 'wrong_password', 'success' => false]);
 
             return response()->json(['message' => 'اسم المستخدم أو كلمة السر غير صحيحة.'], 401);
         }
 
         $user->forceFill(['last_login_at' => now()])->save();
-        AuthLog::record($request, 'login_success', true, $user);
+        AuthLog::record($request, 'login_success', ['actor' => $user]);
 
         return response()->json(['data' => $this->issueSession($user)]);
     }
@@ -133,7 +133,7 @@ class AuthController extends Controller
             AuthToken::where('token', $token)->delete();
         }
 
-        AuthLog::record($request, 'logout', true, $user);
+        AuthLog::record($request, 'logout', ['actor' => $user]);
 
         return response()->json(['message' => 'تم تسجيل الخروج.']);
     }
@@ -153,7 +153,7 @@ class AuthController extends Controller
         ]);
 
         if (! $user->checkPassword($validated['current_password'])) {
-            AuthLog::record($request, 'password_change_failed', false, $user, $user->username, 'wrong_password');
+            AuthLog::record($request, 'password_change_failed', ['actor' => $user, 'reason' => 'wrong_password', 'success' => false]);
 
             return response()->json(['message' => 'كلمة السر الحالية غير صحيحة.'], 422);
         }
@@ -166,7 +166,7 @@ class AuthController extends Controller
             ->where('token', '!=', $request->bearerToken() ?: $request->query('t'))
             ->delete();
 
-        AuthLog::record($request, 'password_changed', true, $user);
+        AuthLog::record($request, 'password_changed', ['actor' => $user]);
 
         return response()->json(['message' => 'تم تحديث كلمة السر.']);
     }

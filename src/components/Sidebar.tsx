@@ -17,12 +17,12 @@ import {
   LifeBuoy,
   LogOut,
   Settings,
-  UserRound
+  ShieldCheck
 } from 'lucide-react';
 import { HousingDossier } from '../types/housing';
 import { useAuth } from '../context/AuthContext';
 
-export type ActiveTab = 'dossiers' | 'new_dossier' | 'documents' | 'audit' | 'regulations' | 'database' | 'users' | 'archive' | 'compare' | 'eviction' | 'registre';
+export type ActiveTab = 'dossiers' | 'new_dossier' | 'documents' | 'audit' | 'regulations' | 'database' | 'users' | 'authlog' | 'archive' | 'compare' | 'eviction' | 'registre';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -30,7 +30,6 @@ interface SidebarProps {
   dossiers: HousingDossier[];
   archivedCount?: number;
   onOpenNewDossier: () => void;
-  onOpenUserSwitcher: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -38,8 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab,
   dossiers,
   archivedCount = 0,
-  onOpenNewDossier,
-  onOpenUserSwitcher
+  onOpenNewDossier
 }) => {
   const { currentUser, permissions, signOut } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -118,8 +116,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     ...(permissions.canManageUsers ? [{
       id: 'users' as ActiveTab,
       label: 'المستخدمون والأدوار الأربعة',
-      sublabel: 'DP / AREF / Director / Dev',
+      sublabel: 'حسابات المديرية والأكاديمية',
       icon: Users
+    }] : []),
+    ...(permissions.canViewAuthLog ? [{
+      id: 'authlog' as ActiveTab,
+      label: 'سجلّ الدخول والأمن',
+      sublabel: 'Journal des connexions',
+      icon: ShieldCheck
     }] : []),
     {
       id: 'regulations' as ActiveTab,
@@ -229,20 +233,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <div className="border-b border-slate-200 px-4 py-3">
               <div className="truncate text-xs font-bold text-slate-900">{currentUser.fullName}</div>
-              <div className="mt-0.5 truncate text-[11px] text-slate-500" dir="ltr">{currentUser.email}</div>
+              <div className="mt-0.5 truncate text-[11px] text-slate-500" dir="ltr">{currentUser.username}</div>
             </div>
             <div className="p-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsUserMenuOpen(false);
-                  onOpenUserSwitcher();
-                }}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-right text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100"
-              >
-                <UserRound className="h-4 w-4 text-slate-500" />
-                <span>تبديل الحساب</span>
-              </button>
               {permissions.canManageUsers && (
                 <button
                   type="button"

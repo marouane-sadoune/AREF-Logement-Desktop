@@ -43,7 +43,7 @@ class UserController extends Controller
         $user->setPassword($validated['password']);
         $user->save();
 
-        AuthLog::record($request, 'user_created', true, $request->attributes->get('auth_user'), null, $user->username);
+        AuthLog::record($request, 'user_created', ['actor' => $request->attributes->get('auth_user'), 'target' => $user->username]);
 
         return response()->json(['message' => 'تم إنشاء الحساب.', 'data' => $this->payload($user)], 201);
     }
@@ -68,7 +68,7 @@ class UserController extends Controller
 
         $user->fill($validated)->save();
 
-        AuthLog::record($request, 'user_updated', true, $request->attributes->get('auth_user'), null, $user->username);
+        AuthLog::record($request, 'user_updated', ['actor' => $request->attributes->get('auth_user'), 'target' => $user->username]);
 
         return response()->json(['message' => 'تم تحديث الحساب.', 'data' => $this->payload($user)]);
     }
@@ -89,7 +89,7 @@ class UserController extends Controller
             AuthToken::where('user_id', $user->id)->delete();
         }
 
-        AuthLog::record($request, 'user_password_reset', true, $request->attributes->get('auth_user'), null, $user->username);
+        AuthLog::record($request, 'user_password_reset', ['actor' => $request->attributes->get('auth_user'), 'target' => $user->username]);
 
         return response()->json(['message' => 'تم ضبط كلمة السر للحساب.']);
     }
@@ -111,7 +111,7 @@ class UserController extends Controller
         $username = $user->username;
         $user->delete();
 
-        AuthLog::record($request, 'user_deleted', true, $current, null, $username);
+        AuthLog::record($request, 'user_deleted', ['actor' => $current, 'target' => $username]);
 
         return response()->json(['message' => 'تم حذف الحساب.']);
     }
