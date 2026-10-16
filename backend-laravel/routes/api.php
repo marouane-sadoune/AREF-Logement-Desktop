@@ -52,6 +52,9 @@ Route::prefix('v1')->group(function () {
         Route::post('/assignments/{id}/documents/{docKey}', [DocumentController::class, 'uploadSupportingDocument']);
         Route::get('/assignments/{id}/documents/{docKey}', [DocumentController::class, 'downloadSupportingDocument']);
 
+        // حفظ PDF مطابق لورقة الوثيقة المعروضة (نافذة حفظ النظام داخل التطبيق المكتبي)
+        Route::post('/documents/save-pdf', [DocumentController::class, 'savePdf']);
+
         // مساطر إفراغ المساكن الإدارية والوظيفية (المحور 4 من المذكرة 40)
         Route::get('/evictions', [EvictionController::class, 'index']);
         Route::post('/evictions', [EvictionController::class, 'store']);

@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\DemandeLogement;
 use App\Models\DocumentFourni;
+use App\Support\ApiAccess;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
+use Native\Desktop\Dialog;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DocumentController extends Controller
@@ -52,7 +54,10 @@ class DocumentController extends Controller
     {
         abort_unless(in_array($docKey, self::SUPPORTING_DOC_KEYS, true), 404);
 
-        $dossier = DemandeLogement::findOrFail($dossierId);
+        ApiAccess::assertCanUploadSupportingDocument($request);
+
+        $dossier = DemandeLogement::with('candidat')->findOrFail($dossierId);
+        ApiAccess::assertDossierVisible($request, $dossier);
         $document = DocumentFourni::firstOrCreate(['numero_dossier' => $dossier->numero_dossier]);
 
         $fileRule = 'file|mimes:pdf,jpg,jpeg,png,webp|max:10240';
@@ -139,7 +144,8 @@ class DocumentController extends Controller
     {
         abort_unless(in_array($docKey, self::SUPPORTING_DOC_KEYS, true), 404);
 
-        $dossier = DemandeLogement::findOrFail($dossierId);
+        $dossier = DemandeLogement::with("candidat")->findOrFail($dossierId);
+        ApiAccess::assertDossierVisible($request, $dossier);
         $document = DocumentFourni::where('numero_dossier', $dossier->numero_dossier)->firstOrFail();
 
         $path = $document->{"{$docKey}_path"};
@@ -156,8 +162,10 @@ class DocumentController extends Controller
     /**
      * توليد رسالة الموافقة الرسمية بصيغة PDF (A4)
      */
-    public function generateApprovalLetter($dossierId): Response
+    public function generateApprovalLetter(Request $request, $dossierId): Response
     {
+        ApiAccess::assertCanGenerateOfficialDocument($request);
+
         $dossier = DemandeLogement::with('candidat')->findOrFail($dossierId);
 
         $pdf = Pdf::loadView('pdf.lettre_accord_attribution', compact('dossier'))
@@ -177,8 +185,10 @@ class DocumentController extends Controller
     /**
      * توليد محضر تسليم السكن والمعاينة (PV de possession)
      */
-    public function generatePvPossession($dossierId): Response
+    public function generatePvPossession(Request $request, $dossierId): Response
     {
+        ApiAccess::assertCanGenerateOfficialDocument($request);
+
         $dossier = DemandeLogement::with('candidat')->findOrFail($dossierId);
 
         $pdf = Pdf::loadView('pdf.pv_possession', compact('dossier'))
@@ -186,5 +196,69 @@ class DocumentController extends Controller
         $this->registerArabicFonts($pdf);
 
         return $pdf->stream('PV_Prise_Possession_' . $dossier->candidat->ppr . '.pdf');
+    }
+
+    /**
+     * استقبال ملف PDF مولَّد في الواجهة (نفس ورقة الوثيقة) وحفظه عبر نافذة النظام
+     * باختيار المستخدم. عند غياب التطبيق المكتبي أو إلغاء الحفظ يُرجَّع الملف للتنزيل.
+     */
+    public function savePdf(Request $request): Response|JsonResponse
+    {
+        // حدّ أقل من post_max_size في PHP المضمَّن (8M) حتى لا يسقط الجسم صامتًا.
+        $validated = $request->validate([
+            'pdf' => 'required|string|max:6500000',
+            'filename' => 'required|string|max:180',
+            'save' => 'sometimes|boolean',
+        ]);
+
+        $pdf = base64_decode(preg_replace('/\s+/', '', $validated['pdf']) ?? '', true);
+        abort_if($pdf === false || !str_starts_with($pdf, '%PDF-') || strlen($pdf) < 1024, 422, 'ملف PDF غير صالح، أعد التوليد.');
+
+        $filename = self::safeFilename($validated['filename']);
+
+        if ($request->boolean('save') && self::sidecarAvailable()) {
+            $chosen = Dialog::new()
+                ->title('حفظ ملف PDF')
+                ->button('حفظ')
+                ->defaultPath(self::documentsDir() . DIRECTORY_SEPARATOR . $filename)
+                ->filter('PDF', ['pdf'])
+                ->save();
+
+            if (!is_string($chosen) || $chosen === '') {
+                return response()->json(['cancelled' => true]);
+            }
+
+            abort_unless(@file_put_contents($chosen, $pdf) !== false, 500, 'تعذّر حفظ الملف في المسار المختار.');
+
+            return response()->json(['saved' => $chosen]);
+        }
+
+        $ascii = preg_replace('/[^\x20-\x7E]/', '', $filename) ?: 'document.pdf';
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $ascii . '"; filename*=UTF-8\'\''. rawurlencode($filename),
+        ]);
+    }
+
+    private static function sidecarAvailable(): bool
+    {
+        return (bool) config('nativephp-internal.api_url');
+    }
+
+    private static function documentsDir(): string
+    {
+        $profile = getenv('USERPROFILE') ?: getenv('HOME');
+
+        return $profile ? rtrim($profile, '\\/') . DIRECTORY_SEPARATOR . 'Documents' : storage_path('app');
+    }
+
+    /** أسماء ملفات ويندوز لا تقبل هذه المحارف، والامتداد مفروض حتى لا يُحقن مسار. */
+    private static function safeFilename(string $name): string
+    {
+        $clean = str_replace('.pdf', '', preg_replace('/[\\\\\/:*?"<>|\x00-\x1F]+/u', '-', $name) ?? '');
+        $clean = trim(preg_replace('/\s+/', ' ', $clean) ?? '', " .-\t");
+
+        return mb_substr($clean !== '' ? $clean : 'document', 0, 120) . '.pdf';
     }
 }

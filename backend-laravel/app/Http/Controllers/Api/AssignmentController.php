@@ -9,6 +9,7 @@ use App\Models\Candidat;
 use App\Models\DemandeLogement;
 use App\Models\DocumentFourni;
 use App\Services\Note40ScoreCalculator;
+use App\Support\ApiAccess;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Http\JsonResponse;
@@ -27,6 +28,23 @@ class AssignmentController extends Controller
         if ($request->filled('direction_provinciale')) {
             $query->whereHas('candidat', fn($candidateQuery) =>
                 $candidateQuery->where('direction_provinciale', $request->direction_provinciale)
+            );
+        }
+
+        // ممثلة المديرية لا تطلع إلا على ملفات مديريتها، مهما أرسلته الواجهة.
+        $user = ApiAccess::user($request);
+        if ($user && $user->role === 'dp_agent') {
+            $dpName = trim((string) $user->dp_name_ar);
+            $dpCode = strtoupper(trim((string) $user->dp_code));
+            $query->whereHas('candidat', fn($candidateQuery) =>
+                $candidateQuery->where(function ($scoped) use ($dpName, $dpCode) {
+                    if ($dpName !== '') {
+                        $scoped->orWhere('direction_provinciale', $dpName);
+                    }
+                    if ($dpCode !== '') {
+                        $scoped->orWhere('direction_provinciale', 'like', "%{$dpCode}%");
+                    }
+                })
             );
         }
 
@@ -98,14 +116,31 @@ class AssignmentController extends Controller
             'documents.fiche_controle' => 'sometimes|boolean',
         ]);
 
+        // إيداع ملف ترشيح من صلاحيات المديرية الإقليمية ومسؤول النظام فقط.
+        $user = ApiAccess::user($request);
+        abort_unless(in_array($user?->role, ['dp_agent', 'dev'], true), 403, 'تكوين ملف الترشيح مخصّص لممثلة(ه) المديرية الإقليمية.');
+
+        // الملف يودع دائماً باسم مديرية الحساب: لا تملك ممثلة(ه) مديرية أن يُدرج
+        // ملف تحت اسم مديرية أخرى.
+        if ($user && $user->role === 'dp_agent') {
+            $ownDp = trim((string) $user->dp_name_ar);
+            abort_if($ownDp === '', 403, 'حسابك غير مرتبط بأي مديرية إقليمية، راجع مسؤول النظام.');
+            $declared = trim((string) ($validated['candidat']['direction_provinciale'] ?? ''));
+            abort_unless($declared === '' || ApiAccess::belongsToDp($user, $declared), 403, 'لا يمكن إيداع ملف يخص مديرية إقليمية أخرى.');
+            $validated['candidat']['direction_provinciale'] = $ownDp;
+        }
+
         // النقط تُحتسب هنا من معطيات المترشح: الواجهة لا تمرّر قيوداً جاهزة.
         $scores = $validated['type_logement'] === 'fonction'
             ? Note40ScoreCalculator::zeroed()
             : Note40ScoreCalculator::score($validated['candidat']);
         $documentFlags = collect($validated['documents'] ?? [])->all();
         $numeroDossier = 'DOS-' . now()->format('Y') . '-' . Str::upper(Str::random(8));
+        $acteur = ApiAccess::actorLabel($request, $validated['acteur'] ?? 'API');
 
-        $demande = DB::transaction(function () use ($validated, $scores, $documentFlags, $numeroDossier) {
+        ApiAccess::assertStatusAllowed($request, $validated['statut_dossier'] ?? 'draft');
+
+        $demande = DB::transaction(function () use ($validated, $scores, $documentFlags, $numeroDossier, $acteur) {
             $candidatData = $validated['candidat'];
             // ConvertEmptyStringsToNull turns the unused Latin name into null,
             // which the NOT NULL column rejects.
@@ -140,7 +175,7 @@ class AssignmentController extends Controller
             AuditHistorique::create([
                 'numero_dossier' => $numeroDossier,
                 'date_action' => now()->toDateTimeString(),
-                'acteur' => $validated['acteur'] ?? 'API',
+                'acteur' => $acteur,
                 'decision' => 'Création du dossier',
                 'commentaire' => $validated['commentaire'] ?? null,
             ]);
@@ -154,9 +189,10 @@ class AssignmentController extends Controller
         ], 201);
     }
 
-    public function show($id): JsonResponse
+    public function show(Request $request, $id): JsonResponse
     {
         $demande = DemandeLogement::with(['candidat', 'bareme', 'documents', 'historique'])->findOrFail($id);
+        ApiAccess::assertDossierVisible($request, $demande);
 
         return response()->json($demande);
     }
@@ -175,8 +211,13 @@ class AssignmentController extends Controller
             'commentaire' => 'nullable|string',
         ]);
 
-        $demande = DemandeLogement::findOrFail($id);
+        $demande = DemandeLogement::with('candidat')->findOrFail($id);
+        ApiAccess::assertDossierVisible($request, $demande);
+
         $status = $validated['statut_dossier'] ?? $validated['status'] ?? null;
+        if ($status !== null) {
+            ApiAccess::assertStatusAllowed($request, $status);
+        }
         $changes = collect($validated)->only([
             'numero_bordereau_dp',
             'date_transmission_aref',
@@ -185,7 +226,7 @@ class AssignmentController extends Controller
             'reasons',
         ])->all();
 
-        DB::transaction(function () use ($demande, $status, $changes, $validated) {
+        DB::transaction(function () use ($demande, $status, $changes, $validated, $request) {
             if ($status !== null) {
                 $changes['statut_dossier'] = $status;
             }
@@ -195,7 +236,7 @@ class AssignmentController extends Controller
                 AuditHistorique::create([
                     'numero_dossier' => $demande->numero_dossier,
                     'date_action' => now()->toDateTimeString(),
-                    'acteur' => $validated['acteur'] ?? 'API',
+                    'acteur' => ApiAccess::actorLabel($request, $validated['acteur'] ?? 'API'),
                     'decision' => $status === null ? 'Mise à jour du dossier' : 'Statut: ' . $status,
                     'commentaire' => $validated['commentaire'] ?? null,
                 ]);

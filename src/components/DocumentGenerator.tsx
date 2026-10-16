@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { 
-  Printer, 
   Download, 
   FileText, 
   CheckCircle, 
@@ -18,6 +17,10 @@ import { PERFORMANCE_RATING_LABELS, RESPONSIBILITY_LABELS, SPOUSE_OCCUPATION_LAB
 import { ArefOfficialHeader } from './ArefOfficialHeader';
 import { OfficialFormSheet } from './OfficialFormSheets';
 import { useAuth } from '../context/AuthContext';
+import { saveDocumentPdf } from '../api/client';
+import Swal from 'sweetalert2';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas-pro';
 
 interface DocumentGeneratorProps {
   dossiers: HousingDossier[];
@@ -72,6 +75,68 @@ function sanitizeDocHtml(html: string): string {
     .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
 }
 
+// صورة الورقة المعروضة تُحوَّل إلى PDF بمقاس A4 مباشرة في الواجهة: لا اعتماد على
+// طابعة ويندوز، والخطوط العربية تخرج كما تظهر تمامًا لأن المخرجات صورة لا نص.
+const A4 = { width: 210, height: 297, margin: 12 };
+// جسم الطلب في PHP المضمَّن محدود بـ 8M، لذا يُرسَل فقط ما يبقى داخل هذا السقف.
+const MAX_UPLOAD_B64 = 6_000_000;
+
+function toBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+
+async function buildSheetPdf(sheet: HTMLElement): Promise<{ doc: jsPDF; base64: string }> {
+  const canvas = await html2canvas(sheet, {
+    scale: 2,
+    backgroundColor: '#ffffff',
+    useCORS: true,
+    logging: false,
+    onclone: (doc) => {
+      const copy = doc.querySelector('.printable-document');
+      if (!copy) return;
+      copy.removeAttribute('contenteditable');
+      copy.querySelectorAll('[contenteditable]').forEach((el) => el.removeAttribute('contenteditable'));
+      Object.assign((copy as HTMLElement).style, {
+        maxWidth: 'none',
+        margin: '0',
+        border: '0',
+        borderRadius: '0',
+        boxShadow: 'none',
+      } as CSSStyleDeclaration);
+    },
+  });
+
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  const contentWidth = A4.width - A4.margin * 2;
+  const contentHeight = A4.height - A4.margin * 2;
+  const pxPerMm = canvas.width / contentWidth;
+  const sliceHeightPx = Math.floor(contentHeight * pxPerMm);
+
+  let rendered = 0;
+  for (let page = 0; rendered < canvas.height; page++) {
+    const height = Math.min(sliceHeightPx, canvas.height - rendered);
+    const slice = document.createElement('canvas');
+    slice.width = canvas.width;
+    slice.height = height;
+    const ctx = slice.getContext('2d');
+    if (!ctx) throw new Error('تعذّر تجهيز لوحة الرسم داخل المتصفح.');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, slice.width, slice.height);
+    ctx.drawImage(canvas, 0, rendered, canvas.width, height, 0, 0, canvas.width, height);
+
+    if (page > 0) doc.addPage();
+    doc.addImage(slice.toDataURL('image/jpeg', 0.92), 'JPEG', A4.margin, A4.margin, contentWidth, height / pxPerMm);
+    rendered += height;
+  }
+
+  return { doc, base64: toBase64(doc.output('arraybuffer')) };
+}
+
 export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
   dossiers,
   selectedDossierId,
@@ -99,6 +164,8 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
   const [editing, setEditing] = useState(false);
   const [bodyToken, setBodyToken] = useState(0);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const overrideKey = activeDossier ? `${activeDossier.id}:${activeDocType}` : '';
 
   useEffect(() => {
@@ -107,10 +174,6 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
     const stored = overrideKey ? overrides[overrideKey] : undefined;
     if (stored !== undefined && el.innerHTML !== stored) el.innerHTML = stored;
   }, [overrideKey, overrides, editing, activeDossier, activeDocType]);
-
-  const handlePrint = () => {
-    window.print();
-  };
 
   if (!activeDossier) {
     return (
@@ -150,6 +213,65 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
   };
 
   const hasOverride = overrides[overrideKey] !== undefined;
+
+  // بديل مباشر لـ"الطباعة إلى PDF": يولَّد الملف من نفس الورقة المعروضة ويُحفظ
+  // بنافذة نظام، فلا يعتمد على طابعة ويندوز التي تُنتج ملفات فارغة.
+  const handleDownloadPdf = async () => {
+    const sheet = sheetRef.current;
+    if (!sheet || pdfBusy) return;
+    commitEdit();
+
+    const label = docTypes.find((d) => d.id === activeDocType)?.label ?? 'document';
+    const filename = `${label} - ${candidate.fullNameAr} - ${activeDossier.referenceNumber}.pdf`;
+
+    setPdfBusy(true);
+    try {
+      const { doc, base64 } = await buildSheetPdf(sheet);
+
+      let saved: string | undefined;
+      let cancelled = false;
+      if (base64.length <= MAX_UPLOAD_B64) {
+        try {
+          const result = await saveDocumentPdf(base64, filename);
+          saved = result.saved;
+          cancelled = Boolean(result.cancelled);
+        } catch {
+          // لا نافذة حفظ متاحة: يمرّ التوليد إلى التحميل المباشر من المتصفح.
+        }
+      }
+
+      if (saved) {
+        Swal.fire({
+          icon: 'success',
+          title: 'تم حفظ ملف PDF',
+          text: saved,
+          confirmButtonText: 'حسناً',
+          confirmButtonColor: '#059669',
+        });
+      } else if (!cancelled) {
+        doc.save(filename);
+        Swal.fire({
+          icon: 'success',
+          title: 'تم تحميل ملف PDF',
+          text: filename,
+          confirmButtonText: 'حسناً',
+          confirmButtonColor: '#059669',
+          timer: 2600,
+          timerProgressBar: true,
+        });
+      }
+    } catch (err) {
+      Swal.fire({
+        icon: 'error',
+        title: 'تعذّر توليد ملف PDF',
+        text: (err as Error).message,
+        confirmButtonText: 'حسناً',
+        confirmButtonColor: '#059669',
+      });
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -193,11 +315,12 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
             </button>
 
             <button
-              onClick={handlePrint}
-              className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+              onClick={handleDownloadPdf}
+              disabled={pdfBusy}
+              className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
             >
-              <Printer className="w-4 h-4" />
-              <span>طباعة هذه الوثيقة (A4)</span>
+              <Download className="w-4 h-4" />
+              <span>{pdfBusy ? 'جارٍ توليد الملف…' : 'تحميل PDF (وثيقة A4)'}</span>
             </button>
           </div>
         </div>
@@ -253,7 +376,10 @@ export const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({
       </div>
 
       {/* Printable Document Sheet Container (A4 layout simulation) */}
-      <div className="max-w-4xl mx-auto bg-white p-10 md:p-14 rounded-xl border border-slate-200 shadow-sm printable-document font-serif text-slate-900 space-y-6">
+      <div
+        ref={sheetRef}
+        className="max-w-4xl mx-auto bg-white p-10 md:p-14 rounded-xl border border-slate-200 shadow-sm printable-document font-serif text-slate-900 space-y-6"
+      >
         {/* Official Header Image for ALL documents (Moroccan Royal Crest + AREF Oriental) */}
         <ArefOfficialHeader 
           className="border-b-2 border-slate-900 pb-3 mb-6" 

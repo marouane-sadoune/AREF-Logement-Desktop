@@ -17,8 +17,15 @@
     </style>
 </head>
 <body>
+    @php
+        // في الحزمة المكتبية يكون مجلد public داخل مسار التطبيق، لا بجانبه.
+        $logo = public_path('images/header.png');
+        if (!is_file($logo)) {
+            $logo = base_path('../public/images/header.png');
+        }
+    @endphp
     <div class="header">
-        <img src="data:image/png;base64,{{ base64_encode(file_get_contents(base_path('../public/images/header.png'))) }}" alt="AREF Oriental">
+        <img src="data:image/png;base64,{{ is_file($logo) ? base64_encode(file_get_contents($logo)) : '' }}" alt="AREF Oriental">
     </div>
 
     <h1>محضر تسليم ومعاينة السكن</h1>

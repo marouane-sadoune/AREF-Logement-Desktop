@@ -412,6 +412,27 @@ export function getDossierDocumentUrl(dossierId: string, docKey: string, index?:
   return query ? `${url}?${query}` : url;
 }
 
+export type PdfSaveResult = { saved?: string; cancelled?: boolean };
+
+// تحميل PDF مطابق للورقة المعروضة: الواجهة تولّد الملف ثم ترسله مرمَّزًا Base64،
+// والخادم يفتحه في نافذة حفظ النظام ويكتبه في المسار الذي يختاره المستخدم.
+export async function saveDocumentPdf(pdfBase64: string, filename: string): Promise<PdfSaveResult> {
+  const res = await fetch(`${API_BASE}/documents/save-pdf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...authHeaders() },
+    body: JSON.stringify({ pdf: pdfBase64, filename, save: true }),
+  });
+
+  if (res.status === 401) handleUnauthorized('/documents/save-pdf');
+
+  // خادم بلا تطبيق مكتبي يرجّع الملف نفسه عوض نافذة الحفظ: يُتجاهل ويُحمّل من الواجهة.
+  if ((res.headers.get('content-type') || '').includes('application/pdf')) return {};
+
+  const body = await res.json().catch(() => ({} as any));
+  if (!res.ok) throw new Error(body?.message || `تعذّر حفظ ملف PDF (${res.status})`);
+  return body as PdfSaveResult;
+}
+
 // ===== مساطر الإفراغ (المحور 4 من المذكرة 40) =====
 // الأجل (deadline_months / deadline_date) يحتسب في الخادم حسب الحالة الموجبة.
 

@@ -39,7 +39,7 @@ class Note40ScoreCalculator
         $seniorityLocality = (int) ($candidat['anciennete_etablissement'] ?? 0);
         $children = min((int) ($candidat['nombre_enfants'] ?? 0), self::CHILDREN_CAP);
 
-        $spousePoints = $candidat['situation_familiale'] === 'marie'
+        $spousePoints = ($candidat['situation_familiale'] ?? null) === 'marie'
             && self::spouseOccupation($candidat) === 'no_work'
             ? self::SPOUSE_NO_WORK_PTS
             : 0;
