@@ -11,6 +11,12 @@ return [
     'version' => env('NATIVEPHP_APP_VERSION', '1.0.0'),
 
     /**
+     * أول تشغيل عند التغليف: هل تُملأ حملة تجريبية (DOS-DEMO)؟ نسخ التسليم
+     * تُثبَّت فارغة، فينشئ المستخدم حسابه ويُدخل ملفاته بنفسه.
+     */
+    'seed_demo' => env('NATIVEPHP_SEED_DEMO', true),
+
+    /**
      * The ID of your application. This should be a unique identifier
      * usually in the form of a reverse domain name.
      * For example: com.nativephp.app

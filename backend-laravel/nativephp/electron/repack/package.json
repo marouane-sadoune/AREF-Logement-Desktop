@@ -1,0 +1,36 @@
+{
+  "name": "aref-logement",
+  "version": "1.0.2",
+  "description": "Gestion des demandes de logement (Note 40)",
+  "author": "AREF Oriental",
+  "license": "UNLICENSED",
+  "private": true,
+  "build": {
+    "appId": "com.areforiental.logement",
+    "productName": "aref-logement",
+    "directories": {
+      "output": "../dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "AREF-Logement-Setup-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AREF Logement",
+      "uninstallDisplayName": "AREF Logement",
+      "deleteAppDataOnUninstall": false
+    }
+  },
+  "devDependencies": {
+    "electron-builder": "^26.15.3"
+  }
+}

@@ -63,7 +63,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             // schema this way, since its database outlives the build.
             Artisan::call('native:migrate', ['--force' => true]);
 
-            if (DB::table('demandes_logement')->count() === 0) {
+            if (config('nativephp.seed_demo') && DB::table('demandes_logement')->count() === 0) {
                 // native:seed goes through Laravel's confirm()-in-production path,
                 // which needs a terminal and dies with "Undefined constant STDIN"
                 // inside a packaged app, so the seeder class is run directly.
