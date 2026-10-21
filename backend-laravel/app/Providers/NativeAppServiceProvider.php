@@ -22,6 +22,8 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         // NativePHP starts this Laravel app on 127.0.0.1:8100 (first free port
         // in 8100-9000). Load the window over plain HTTP so the SPA's relative
         // /api/v1 calls hit the same origin; the default URL scheme breaks fetch().
+        // NativePHP 2.3.1 لا يوفّر center() على النافذة (موجودة فقط في HasPositioner
+        // المخصّص للأيقونات)، وتصفيرها كان يُسقط boot() فلا تفتح أي نافذة.
         Window::open()
             ->id('main')
             ->url('http://127.0.0.1:8100')
@@ -29,7 +31,6 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             ->height(900)
             ->minWidth(1120)
             ->minHeight(700)
-            ->center()
             ->rememberState();
     }
 
